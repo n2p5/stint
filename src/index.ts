@@ -13,14 +13,14 @@ export {
   getPasskeyPRF
 } from './passkey'
 
-// Authz functions
+// Stint functions (authz + feegrant)
 export {
   createAuthzGrantMsg,
-  createBidirectionalAuthz,
-  revokeAuthz,
+  createStintSetup,
+  revokeStint,
   createSendAuthorization,
   createGenericAuthorization
-} from './authz'
+} from './stint'
 
 // Types
 export type {
@@ -30,6 +30,6 @@ export type {
 export type {
   StintWalletOptions,
   SessionWalletConfig,
-  AuthzConfig,
+  StintConfig,
   PasskeyCredential
 } from './types'

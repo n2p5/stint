@@ -7,11 +7,13 @@ export interface PasskeyCredential {
   userId: string
 }
 
-export interface AuthzConfig {
-  grantee: string
-  granter: string
-  expiration?: Date
+export interface StintConfig {
+  sessionExpiration?: Date
   spendLimit?: {
+    denom: string
+    amount: string
+  }
+  gasLimit?: {
     denom: string
     amount: string
   }
