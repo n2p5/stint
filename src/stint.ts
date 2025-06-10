@@ -2,11 +2,13 @@ import { StargateClient, SigningStargateClient } from '@cosmjs/stargate'
 import { MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
+import { MsgGrantAllowance, MsgRevokeAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
+import { BasicAllowance, PeriodicAllowance, AllowedMsgAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
 import { SessionWallet } from './wallet'
-import { AuthzConfig } from './types'
+import { StintConfig } from './types'
 
 // Create a send authorization
 export function createSendAuthorization(spendLimit?: Coin[]): Any {
@@ -63,52 +65,75 @@ export function createAuthzGrantMsg(
   }
 }
 
-// Create bidirectional authz setup
-export async function createBidirectionalAuthz(
+// Create a basic fee allowance
+export function createBasicAllowance(spendLimit?: Coin[], expiration?: Date): Any {
+  const allowance = BasicAllowance.fromPartial({
+    spendLimit,
+    expiration: expiration ? dateToTimestamp(expiration) : undefined,
+  })
+
+  return Any.fromPartial({
+    typeUrl: '/cosmos.feegrant.v1beta1.BasicAllowance',
+    value: BasicAllowance.encode(allowance).finish(),
+  })
+}
+
+// Create a feegrant message
+export function createFeegrantMsg(
+  granter: string,
+  grantee: string,
+  allowance: Any
+): MsgGrantAllowance {
+  return {
+    granter,
+    grantee,
+    allowance,
+  }
+}
+
+// Create combined stint setup (authz + feegrant)
+export async function createStintSetup(
   wallet: SessionWallet,
   config: {
     sessionExpiration?: Date
     spendLimit?: { denom: string; amount: string }
+    gasLimit?: { denom: string; amount: string }
   }
 ): Promise<{
-  sessionToMainGrant: MsgGrant
-  mainToSessionGrant: MsgGrant
-  gasAmount: Coin
+  authzGrant: MsgGrant
+  feegrant: MsgGrantAllowance
 }> {
   const mainAddress = await wallet.mainWallet.getAccounts().then(accounts => accounts[0].address)
   const sessionAddress = await wallet.sessionWallet.getAccounts().then(accounts => accounts[0].address)
 
-  // Session wallet grants main wallet unlimited send authorization (for recovery)
-  // Use GenericAuthorization for unlimited access
-  const sessionToMainAuth = createGenericAuthorization('/cosmos.bank.v1beta1.MsgSend')
-  const sessionToMainGrant = createAuthzGrantMsg(
-    sessionAddress,
-    mainAddress,
-    sessionToMainAuth
-  )
-
   // Main wallet grants session wallet limited send authorization
   const spendLimitCoins: Coin[] = config.spendLimit
     ? [Coin.fromPartial({ denom: config.spendLimit.denom, amount: config.spendLimit.amount })]
-    : [Coin.fromPartial({ denom: 'uatone', amount: '1000000' })] // Default 1 ATONE limit
-  const mainToSessionAuth = createSendAuthorization(spendLimitCoins)
-  const mainToSessionGrant = createAuthzGrantMsg(
+    : [Coin.fromPartial({ denom: 'uphoton', amount: '1000000' })] // Default 1 PHOTON limit
+  
+  const sendAuth = createSendAuthorization(spendLimitCoins)
+  const authzGrant = createAuthzGrantMsg(
     mainAddress,
     sessionAddress,
-    mainToSessionAuth,
+    sendAuth,
     config.sessionExpiration
   )
 
-  // Calculate gas amount to send to session wallet
-  const gasAmount: Coin = Coin.fromPartial({
-    denom: 'uatone',
-    amount: '1000000', // Default 1 ATONE for gas
-  })
+  // Main wallet grants session wallet fee allowance
+  const gasLimitCoins: Coin[] = config.gasLimit
+    ? [Coin.fromPartial({ denom: config.gasLimit.denom, amount: config.gasLimit.amount })]
+    : [Coin.fromPartial({ denom: 'uphoton', amount: '1000000' })] // Default 1 UPHOTON for gas
+  
+  const feeAllowance = createBasicAllowance(gasLimitCoins, config.sessionExpiration)
+  const feegrant = createFeegrantMsg(
+    mainAddress,
+    sessionAddress,
+    feeAllowance
+  )
 
   return {
-    sessionToMainGrant,
-    mainToSessionGrant,
-    gasAmount,
+    authzGrant,
+    feegrant,
   }
 }
 
@@ -125,19 +150,30 @@ export function createRevokeMsg(
   }
 }
 
-// Helper to revoke all stint session authorizations
-export async function revokeAuthz(
+// Create a feegrant revoke message
+export function createFeegrantRevokeMsg(
+  granter: string,
+  grantee: string
+): MsgRevokeAllowance {
+  return {
+    granter,
+    grantee,
+  }
+}
+
+// Helper to revoke all stint grants (authz + feegrant)
+export async function revokeStint(
   wallet: SessionWallet,
   msgTypeUrl: string = '/cosmos.bank.v1beta1.MsgSend'
 ): Promise<{
-  revokeSessionToMain: MsgRevoke
-  revokeMainToSession: MsgRevoke
+  revokeAuthz: MsgRevoke
+  revokeFeegrant: MsgRevokeAllowance
 }> {
   const mainAddress = await wallet.mainWallet.getAccounts().then(accounts => accounts[0].address)
   const sessionAddress = await wallet.sessionWallet.getAccounts().then(accounts => accounts[0].address)
 
   return {
-    revokeSessionToMain: createRevokeMsg(sessionAddress, mainAddress, msgTypeUrl),
-    revokeMainToSession: createRevokeMsg(mainAddress, sessionAddress, msgTypeUrl),
+    revokeAuthz: createRevokeMsg(mainAddress, sessionAddress, msgTypeUrl),
+    revokeFeegrant: createFeegrantRevokeMsg(mainAddress, sessionAddress),
   }
 }

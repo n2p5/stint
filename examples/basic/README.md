@@ -5,7 +5,7 @@ This example demonstrates how to use Stint to create a session wallet with Keplr
 ## Prerequisites
 
 - Keplr browser extension installed
-- Some ATONE tokens on the AtomOne testnet for gas fees
+- Some PHOTON tokens on the AtomOne testnet for gas fees
 
 ## Getting Started
 
@@ -40,19 +40,20 @@ This example demonstrates how to use Stint to create a session wallet with Keplr
 - Chain ID: `atomone-testnet-1`
 - RPC: https://atomone-testnet-1-rpc.allinbits.services
 - REST API: https://atomone-testnet-1-api.allinbits.services
-- Token: ATONE (uatone)
+- Staking Token: ATONE (uatone)
+- Fee Token: PHOTON (uphoton)
 - Bech32 Prefix: `atone`
 
 ## Getting Testnet Tokens
 
-You'll need ATONE testnet tokens to pay for gas. Check with the AtomOne community for faucet information.
+You'll need PHOTON testnet tokens to pay for gas. Check with the AtomOne community for faucet information.
 
 ## Next Steps
 
 To complete the implementation, you would:
 
-1. Use `createBidirectionalAuthz()` to create the authorization grants
-2. Build and broadcast a transaction with both grants and gas funds
-3. Use the session wallet to send authorized transactions
+1. Use `createStintSetup()` to create the authorization and feegrant
+2. Build and broadcast a transaction with both authz grant and feegrant
+3. Use the session wallet to send authorized transactions (gas paid by feegrant)
 
 See the main library documentation for detailed implementation guidance.

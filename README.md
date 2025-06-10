@@ -52,13 +52,13 @@ const sessionWallet = await createSessionWallet(privateKey, 'cosmos')
 const stint = await initStintWallet({
   mainWallet: keplrOfflineSigner, // Your Keplr wallet
   sessionConfig: {
-    chainId: 'cosmoshub-4',
-    rpcEndpoint: 'https://rpc.cosmos.network',
-    gasPrice: '0.025uatom'
+    chainId: 'atomone-1',
+    rpcEndpoint: 'https://atomone-rpc.allinbits.com',
+    gasPrice: '1uphoton'
     // For AtomOne testnet:
     // chainId: 'atomone-testnet-1',
     // rpcEndpoint: 'https://atomone-testnet-1-rpc.allinbits.services',
-    // gasPrice: '0.001uatone'
+    // gasPrice: '1uphoton'
   }
 }, sessionWallet)
 
@@ -66,7 +66,7 @@ const stint = await initStintWallet({
 const { sessionToMainGrant, mainToSessionGrant, gasAmount } = 
   await createBidirectionalAuthz(stint, {
     sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    spendLimit: { denom: 'uatom', amount: '1000000' }
+    spendLimit: { denom: 'uphoton', amount: '1000000' }
   })
 
 // 5. Broadcast the authorization setup with your main wallet

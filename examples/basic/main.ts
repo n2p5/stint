@@ -3,7 +3,7 @@ import {
   derivePrivateKey,
   createSessionWallet,
   initStintWallet,
-  createBidirectionalAuthz,
+  createStintSetup,
   getSessionAddress,
   getMainAddress,
 } from 'stint'
@@ -93,8 +93,8 @@ keplrBtn.addEventListener('click', async () => {
         ],
         feeCurrencies: [
           {
-            coinDenom: 'ATONE',
-            coinMinimalDenom: 'uatone',
+            coinDenom: 'PHOTON',
+            coinMinimalDenom: 'uphoton',
             coinDecimals: 6,
             gasPriceStep: {
               low: 0.001,
@@ -147,7 +147,7 @@ sessionBtn.addEventListener('click', async () => {
         sessionConfig: {
           chainId: 'atomone-testnet-1',
           rpcEndpoint: 'https://atomone-testnet-1-rpc.allinbits.services',
-          gasPrice: '0.001uatone',
+          gasPrice: '0.001uphoton',
         },
       },
       sessionWallet
@@ -161,9 +161,8 @@ Session Address: ${sessionAddr}
 Main Address: ${mainAddr}
 
 Next steps would be:
-1. Create bidirectional authz grants
-2. Send gas funds to session wallet
-3. Start transacting!`
+1. Create authz grant and feegrant
+2. Start transacting!`
     sessionStatus.className = 'status success'
 
     transactionBtn.disabled = false
@@ -173,29 +172,29 @@ Next steps would be:
   }
 })
 
-// Step 4: Setup Bidirectional Authz
+// Step 4: Setup Stint (Authz + Feegrant)
 transactionBtn.addEventListener('click', async () => {
   try {
-    transactionStatus.textContent = 'Setting up bidirectional authorization...'
+    transactionStatus.textContent = 'Setting up stint authorization and feegrant...'
     transactionStatus.className = 'status'
 
     if (!stintWallet || !window.keplr) {
       throw new Error('Missing prerequisites')
     }
 
-    // Create bidirectional authz configuration
-    const authzSetup = await createBidirectionalAuthz(stintWallet, {
+    // Create stint setup (authz + feegrant)
+    const stintSetup = await createStintSetup(stintWallet, {
       sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      spendLimit: { denom: 'uatone', amount: '1000000' } // 1 ATONE spending limit
+      spendLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON spending limit
+      gasLimit: { denom: 'uphoton', amount: '1000000' } // 1 PHOTON gas limit
     })
 
     const mainAddr = await getMainAddress(stintWallet)
     const sessionAddr = await getSessionAddress(stintWallet)
 
     transactionStatus.textContent = `Creating transaction with:
-- Session → Main grant (recovery)
-- Main → Session grant (1 ATONE limit, 24h expiry)
-- Gas funds: ${authzSetup.gasAmount.amount} ${authzSetup.gasAmount.denom}
+- Authz grant: 1 PHOTON spending limit, 24h expiry
+- Feegrant: 1 PHOTON gas limit, 24h expiry
 
 Broadcasting...`
 
@@ -213,85 +212,51 @@ Broadcasting...`
       offlineSigner,
       {
         gasPrice: {
-          denom: 'uatone',
+          denom: 'uphoton',
           amount: { toString: () => '0.001', valueOf: () => 0.001 } as any
         }
       }
     )
 
-    // Create the send message for gas funds
-    const sendMsg = {
-      typeUrl: '/cosmos.bank.v1beta1.MsgSend',
-      value: MsgSend.fromPartial({
-        fromAddress: mainAddr,
-        toAddress: sessionAddr,
-        amount: [authzSetup.gasAmount],
-      }),
-    }
-
-    // Transaction 1: Main wallet grants session wallet + sends gas funds (combined)
-    transactionStatus.textContent += '\n\nStep 1: Main wallet grants authorization and sends gas funds...'
+    // Transaction: Main wallet grants authz + feegrant to session wallet
+    transactionStatus.textContent += '\n\nSetting up stint with authz and feegrant...'
     
     const mainMessages = [
       {
         typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
-        value: authzSetup.mainToSessionGrant,
+        value: stintSetup.authzGrant,
       },
-      sendMsg,
+      {
+        typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance',
+        value: stintSetup.feegrant,
+      },
     ]
 
     const mainGasEstimate = await mainClient.simulate(mainAddr, mainMessages, '')
     const mainFee = {
-      amount: [{ denom: 'uatone', amount: '3000' }],
+      amount: [{ denom: 'uphoton', amount: '3000' }],
       gas: Math.ceil(mainGasEstimate * 1.5).toString(), // Increased buffer
     }
 
-    const mainResult = await mainClient.signAndBroadcast(mainAddr, mainMessages, mainFee, 'Main wallet setup: grant + gas funds')
+    const mainResult = await mainClient.signAndBroadcast(mainAddr, mainMessages, mainFee, 'Stint setup: authz + feegrant')
 
     if (mainResult.code !== 0) {
-      throw new Error(`Main wallet transaction failed: ${mainResult.rawLog}`)
+      throw new Error(`Stint setup transaction failed: ${mainResult.rawLog}`)
     }
 
-    transactionStatus.textContent += `\n✅ Main wallet setup complete: ${mainResult.transactionHash}`
+    const result = { transactionHash: mainResult.transactionHash, height: mainResult.height }
 
-    // Transaction 2: Session wallet grants main wallet (for recovery)
-    transactionStatus.textContent += '\n\nStep 2: Session wallet grants recovery authorization to main wallet...'
+    transactionStatus.textContent = `✅ Stint setup complete!
 
-    const sessionMessages = [
-      {
-        typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
-        value: authzSetup.sessionToMainGrant,
-      },
-    ]
-
-    const sessionClient = stintWallet.client
-    const sessionGasEstimate = await sessionClient.simulate(sessionAddr, sessionMessages, '')
-    const sessionFee = {
-      amount: [{ denom: 'uatone', amount: '2500' }], // Increased from 1500 to 2500
-      gas: Math.ceil(sessionGasEstimate * 1.5).toString(), // Increased buffer
-    }
-
-    const sessionResult = await sessionClient.signAndBroadcast(sessionAddr, sessionMessages, sessionFee, 'Session wallet grants main wallet recovery')
-
-    if (sessionResult.code !== 0) {
-      throw new Error(`Session wallet transaction failed: ${sessionResult.rawLog}`)
-    }
-
-    const result = { transactionHash: `${mainResult.transactionHash}, ${sessionResult.transactionHash}`, height: mainResult.height }
-
-    transactionStatus.textContent = `✅ Session wallet setup complete!
-
-Transaction hashes: 
-- Main wallet (grant + gas): ${mainResult.transactionHash}
-- Session wallet grant: ${sessionResult.transactionHash}
+Transaction hash: ${result.transactionHash}
 Height: ${result.height}
 
 Session wallet ${sessionAddr} can now:
-- Send up to 1 ATONE using authz
-- Has gas funds for transactions
+- Send up to 1 PHOTON using authz
+- Use up to 1 PHOTON for gas fees (via feegrant)
+- Does NOT hold any funds!
 
-Main wallet ${mainAddr} can:
-- Recover all funds from session wallet at any time
+All gas fees and transactions are paid by: ${mainAddr}
 
 Try sending a transaction with the session wallet!`
     transactionStatus.className = 'status success'
@@ -312,7 +277,7 @@ Try sending a transaction with the session wallet!`
         const recipient = prompt('Enter recipient address (atone1...):', sessionAddr)
         if (!recipient) return
 
-        const amount = prompt('Enter amount in uatone (max 1000000):', '1000')
+        const amount = prompt('Enter amount in uphoton (max 1000000):', '1000')
         if (!amount || parseInt(amount) > 1000000) {
           throw new Error('Invalid amount')
         }
@@ -324,7 +289,7 @@ Try sending a transaction with the session wallet!`
         const innerSendMsg = MsgSend.fromPartial({
           fromAddress: mainAddr, // Funds come from main wallet
           toAddress: recipient,
-          amount: [{ denom: 'uatone', amount }],
+          amount: [{ denom: 'uphoton', amount }],
         })
 
         const execMsg = {
@@ -340,11 +305,12 @@ Try sending a transaction with the session wallet!`
           }),
         }
 
-        // Use the session wallet's client
+        // Use the session wallet's client - gas will be paid by feegrant!
         const sessionClient = stintWallet.client
         const sessionFee = {
-          amount: [{ denom: 'uatone', amount: '1000' }],
+          amount: [{ denom: 'uphoton', amount: '1000' }],
           gas: '200000',
+          granter: mainAddr, // Feegrant pays the fees
         }
 
         const execResult = await sessionClient.signAndBroadcast(
@@ -360,13 +326,14 @@ Try sending a transaction with the session wallet!`
 
         transactionStatus.textContent = `✅ Session transaction successful!
 
-Sent ${amount} uatone to ${recipient}
+Sent ${amount} uphoton to ${recipient}
 Using authz from: ${mainAddr}
 Signed by session wallet: ${sessionAddr}
 
 Transaction hash: ${execResult.transactionHash}
 
-The session wallet signed this transaction without needing access to your main wallet! 🎉`
+The session wallet signed this transaction without needing access to your main wallet!
+Gas was paid by the feegrant from the main wallet! 🎉`
         transactionStatus.className = 'status success'
       } catch (error) {
         transactionStatus.textContent = `❌ Session transaction error: ${error}`
