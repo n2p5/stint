@@ -3,15 +3,17 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "concurrently \"pnpm --dir ../.. dev\" \"vite\"",
+    "dev:fast": "vite",
+    "build": "pnpm --dir ../.. build && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "stint": "workspace:*"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
-    "typescript": "^5.8.3"
+    "concurrently": "^9.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^5.0.0"
   }
 }

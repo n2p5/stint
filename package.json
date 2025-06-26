@@ -18,6 +18,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "dev:example": "pnpm --filter stint-example-basic dev",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src examples --ext ts,tsx",
     "format": "prettier --write \"src/**/*.ts\" \"examples/**/*.ts\"",

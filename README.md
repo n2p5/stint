@@ -1,18 +1,27 @@
-# stint
+# Stint
 
-Short-lived, non-custodial session wallets for Cosmos SDK.
+Short-lived, non-custodial session wallets for the Cosmos SDK ecosystem.
 
 ## Overview
 
-Stint enables users to create ephemeral session wallets that can perform limited blockchain actions without requiring constant hardware wallet interaction. It uses WebAuthn Passkeys with PRF extension for key derivation and Cosmos SDK's authz module for secure delegation.
+Stint enables users to create ephemeral session wallets that can perform limited blockchain actions without requiring constant hardware wallet interaction. The system uses Cosmos SDK's `authz` and `feegrant` modules combined with WebAuthn Passkeys for secure, deterministic key derivation.
+
+## Key Concept
+
+The system works by creating a **session wallet** that never holds funds but can transact on behalf of your main wallet:
+
+1. **Passkey + PRF**: Creates a deterministic private key using WebAuthn Passkey with PRF extension
+2. **Authz Grant**: Main wallet authorizes session wallet to perform specific actions (e.g., Send messages) with defined limits  
+3. **Feegrant**: Main wallet grants fee allowance to session wallet, so it doesn't need to hold any funds for gas
 
 ## Features
 
-- 🔑 **Passkey-based key derivation** - Use WebAuthn PRF extension for deterministic key generation
-- 🔐 **Non-custodial** - Users maintain full control of their funds
-- ⚡ **Seamless UX** - Sign transactions without popups for authorized actions
-- 🔄 **Bidirectional authorization** - Ensures funds can always be recovered
-- 📦 **Framework agnostic** - Works with any JavaScript environment
+- 🔑 **Passkey-based key derivation** - Uses WebAuthn PRF extension for deterministic, secure key generation
+- 🔐 **Non-custodial** - Session wallets never hold funds, all gas is covered by feegrants
+- ⚡ **Seamless UX** - Sign transactions without hardware wallet popups for authorized actions  
+- 🚀 **Zero balance required** - Session wallets work without any token balance
+- 🌐 **Multi-wallet support** - Works with Keplr, Leap, Cosmostation, and any Cosmos wallet
+- 📦 **Framework agnostic** - Works in browsers and React Native environments
 
 ## Installation
 
@@ -28,56 +37,55 @@ yarn add stint
 
 ```typescript
 import {
-  createPasskeyCredential,
-  derivePrivateKey,
-  createSessionWallet,
-  initStintWallet,
-  createBidirectionalAuthz
+  newSessionWallet,
+  createStintSetup
 } from 'stint'
 
-// 1. Create a passkey and derive a private key
-const credential = await createPasskeyCredential({
-  rpId: window.location.hostname,
-  rpName: 'My App',
-  userName: 'user@example.com',
-  userDisplayName: 'User'
+// 1. Create complete session (handles everything automatically)
+const wallet = await newSessionWallet({
+  primaryWallet: yourCosmosWalletSigner, // Keplr, Leap, etc.
+  prefix: 'cosmos',                      // optional, defaults to 'atom1'
+  saltName: 'stint-wallet',              // optional, defaults to 'stint-wallet'
+  sessionConfig: {
+    chainId: 'cosmoshub-4',
+    rpcEndpoint: 'https://rpc.cosmos.network',
+    gasPrice: '0.025uatom'
+  }
 })
 
-const privateKey = await derivePrivateKey(credential.id)
+// 2. Create authz grant and feegrant setup
+const stintSetup = await createStintSetup(wallet, {
+  sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+  spendLimit: { denom: 'uatom', amount: '1000000' }, // 1 ATOM spending limit
+  gasLimit: { denom: 'uatom', amount: '500000' }      // 0.5 ATOM gas limit
+})
 
-// 2. Create session wallet
-const sessionWallet = await createSessionWallet(privateKey, 'cosmos')
-
-// 3. Initialize Stint with your main wallet
-const stint = await initStintWallet({
-  mainWallet: keplrOfflineSigner, // Your Keplr wallet
-  sessionConfig: {
-    chainId: 'atomone-1',
-    rpcEndpoint: 'https://atomone-rpc.allinbits.com',
-    gasPrice: '1uphoton'
-    // For AtomOne testnet:
-    // chainId: 'atomone-testnet-1',
-    // rpcEndpoint: 'https://atomone-testnet-1-rpc.allinbits.services',
-    // gasPrice: '1uphoton'
+// 3. Broadcast setup transaction with your primary wallet
+const setupMessages = [
+  {
+    typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
+    value: stintSetup.authzGrant,
+  },
+  {
+    typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance', 
+    value: stintSetup.feegrant,
   }
-}, sessionWallet)
+]
 
-// 4. Set up bidirectional authorization
-const { sessionToMainGrant, mainToSessionGrant, gasAmount } = 
-  await createBidirectionalAuthz(stint, {
-    sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    spendLimit: { denom: 'uphoton', amount: '1000000' }
-  })
+await primaryClient.signAndBroadcast(await wallet.primaryAddress(), setupMessages, fee)
 
-// 5. Broadcast the authorization setup with your main wallet
-// (Implementation depends on your app)
+// 4. Session wallet is now ready to transact!
+const sessionAddress = await wallet.sessionAddress()
+const primaryAddress = await wallet.primaryAddress()
+// sessionAddress can now send transactions within authorized limits
+// All gas fees are paid by the feegrant from your primary wallet
 ```
 
 ## Examples
 
 See the [examples](./examples) directory for complete working examples:
 
-- [Basic Example](./examples/basic) - Simple browser demo with Keplr integration
+- [Basic Example](./examples/basic) - Complete browser demo with multi-wallet support
 
 ## Development
 
@@ -91,6 +99,9 @@ pnpm build
 # Run in watch mode
 pnpm dev
 
+# Run example with hot reload
+pnpm dev:example
+
 # Type check
 pnpm typecheck
 
@@ -103,21 +114,49 @@ pnpm format
 
 ## How It Works
 
-1. **Passkey Creation**: Uses WebAuthn to create a passkey with PRF extension
-2. **Key Derivation**: Derives a deterministic private key from the passkey PRF output
-3. **Session Wallet**: Creates an ephemeral wallet from the derived key
-4. **Bidirectional Authz**:
-   - Session wallet authorizes main wallet for unlimited withdrawals (recovery)
-   - Main wallet authorizes session wallet for limited actions
-5. **Gas Funding**: Main wallet sends gas funds to session wallet
-6. **Usage**: Session wallet can now sign transactions within authorized limits
+1. **Passkey Creation**: Uses WebAuthn to create a passkey with PRF extension for your primary wallet address
+2. **Key Derivation**: Derives a deterministic private key from the passkey PRF output using a configurable salt
+3. **Session Wallet**: Creates an ephemeral wallet from the derived key that never holds funds
+4. **Authorization Setup**: Creates both authz grant and feegrant in a single transaction:
+   - **Authz Grant**: Primary wallet authorizes session wallet for specific actions (e.g., Send) with spending limits
+   - **Feegrant**: Primary wallet grants fee allowance so session wallet can pay for gas
+5. **Seamless Usage**: Session wallet can now sign and send transactions within authorized limits without any balance
+
+## Multiple Session Wallets
+
+You can create multiple session wallets for different purposes using salt names:
+
+```typescript
+// Default session wallet
+const defaultWallet = await newSessionWallet({
+  primaryWallet: signer,
+  sessionConfig: config
+})
+
+// Trading-specific session wallet  
+const tradingWallet = await newSessionWallet({
+  primaryWallet: signer,
+  saltName: 'trading',
+  sessionConfig: config
+})
+
+// Gaming-specific session wallet
+const gamingWallet = await newSessionWallet({
+  primaryWallet: signer,
+  saltName: 'gaming',
+  sessionConfig: config
+})
+```
+
+Each salt creates a completely different private key from the same passkey.
 
 ## Security Considerations
 
-- Session wallets are ephemeral and should be treated as temporary
-- Always set appropriate authorization limits and expiration times
-- The bidirectional authz ensures users can always recover funds
-- Private keys are derived deterministically from passkeys stored in secure hardware
+- **Session wallets are ephemeral** and should be treated as temporary
+- **No funds at risk** - Session wallets never hold any tokens, all gas is covered by feegrants
+- **Configurable limits** - Set appropriate authorization limits and expiration times
+- **Deterministic keys** - Private keys are derived deterministically from passkeys stored in secure hardware
+- **Revocable** - Authorizations can be revoked at any time by the primary wallet
 
 ## License
 

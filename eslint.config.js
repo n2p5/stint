@@ -34,6 +34,9 @@ export default [
         setTimeout: 'readonly',
         MutationObserver: 'readonly',
         Event: 'readonly',
+        console: 'readonly',
+        atob: 'readonly',
+        btoa: 'readonly',
       },
     },
     plugins: {
