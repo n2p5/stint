@@ -1,6 +1,5 @@
-import { SigningStargateClient, StargateClient, GasPrice } from '@cosmjs/stargate'
+import { SigningStargateClient, GasPrice } from '@cosmjs/stargate'
 import { DirectSecp256k1Wallet, OfflineSigner } from '@cosmjs/proto-signing'
-import { Secp256k1, sha256 } from '@cosmjs/crypto'
 import { fromHex } from '@cosmjs/encoding'
 import { StintWalletOptions } from './types'
 
