@@ -1,4 +1,3 @@
-import { StdFee } from '@cosmjs/stargate'
 import { OfflineSigner } from '@cosmjs/proto-signing'
 
 export interface PasskeyCredential {

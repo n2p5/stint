@@ -9,7 +9,6 @@ import {
 } from 'stint'
 
 // State
-let passkeyCredentialId: string | null = null
 let sessionPrivateKey: string | null = null
 let stintWallet: any = null
 
@@ -37,7 +36,6 @@ passkeyBtn.addEventListener('click', async () => {
       userDisplayName: 'Demo User',
     })
 
-    passkeyCredentialId = credential.id
     sessionPrivateKey = await derivePrivateKey(credential.id)
 
     passkeyStatus.textContent = `✅ Passkey created!\nCredential ID: ${credential.id}\nDerived key ready.`
@@ -205,7 +203,6 @@ Broadcasting...`
     // Import SigningStargateClient for main wallet transactions
     const { SigningStargateClient } = await import('@cosmjs/stargate')
     const { MsgSend } = await import('cosmjs-types/cosmos/bank/v1beta1/tx')
-    const { TxRaw } = await import('cosmjs-types/cosmos/tx/v1beta1/tx')
     
     const mainClient = await SigningStargateClient.connectWithSigner(
       'https://atomone-testnet-1-rpc.allinbits.services',
@@ -241,7 +238,7 @@ Broadcasting...`
     const mainResult = await mainClient.signAndBroadcast(mainAddr, mainMessages, mainFee, 'Stint setup: authz + feegrant')
 
     if (mainResult.code !== 0) {
-      throw new Error(`Stint setup transaction failed: ${mainResult.rawLog}`)
+      throw new Error(`Stint setup transaction failed: ${mainResult.events}`)
     }
 
     const result = { transactionHash: mainResult.transactionHash, height: mainResult.height }

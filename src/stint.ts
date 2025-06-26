@@ -1,14 +1,12 @@
-import { StargateClient, SigningStargateClient } from '@cosmjs/stargate'
 import { MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
 import { MsgGrantAllowance, MsgRevokeAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
-import { BasicAllowance, PeriodicAllowance, AllowedMsgAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
+import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
 import { SessionWallet } from './wallet'
-import { StintConfig } from './types'
 
 // Create a send authorization
 export function createSendAuthorization(spendLimit?: Coin[]): Any {
