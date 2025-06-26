@@ -7,4 +7,8 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['stint'],
   },
+  define: {
+    global: 'globalThis',
+    'process.env.NODE_ENV': '"development"',
+  },
 })

@@ -1,123 +1,234 @@
-import {
-  createPasskeyCredential,
-  derivePrivateKey,
-  createSessionWallet,
-  initStintWallet,
-  createStintSetup,
-  getSessionAddress,
-  getMainAddress,
-} from 'stint'
+// Minimal process polyfill for cosmjs compatibility
+;(globalThis as any).process = {
+  env: {},
+  nextTick: (fn: () => void) => Promise.resolve().then(() => fn()),
+  browser: true
+}
+
+import { newSessionWallet, createStintSetup } from 'stint'
 
 // State
-let sessionPrivateKey: string | null = null
 let stintWallet: any = null
 
 // UI Elements
-const passkeyBtn = document.getElementById('create-passkey') as HTMLButtonElement
-const keplrBtn = document.getElementById('connect-keplr') as HTMLButtonElement
+const walletBtn = document.getElementById('connect-wallet') as HTMLButtonElement
 const sessionBtn = document.getElementById('create-session') as HTMLButtonElement
 const transactionBtn = document.getElementById('test-transaction') as HTMLButtonElement
 
-const passkeyStatus = document.getElementById('passkey-status')!
 const walletStatus = document.getElementById('wallet-status')!
 const sessionStatus = document.getElementById('session-status')!
 const transactionStatus = document.getElementById('transaction-status')!
 
-// Step 1: Create Passkey
-passkeyBtn.addEventListener('click', async () => {
+// Helper function for test sending
+async function testSessionSend() {
   try {
-    passkeyStatus.textContent = 'Creating passkey...'
-    passkeyStatus.className = 'status'
+    transactionStatus.textContent = 'Sending transaction with session wallet...'
+    transactionStatus.className = 'status'
 
-    const credential = await createPasskeyCredential({
-      rpId: window.location.hostname,
-      rpName: 'Stint Demo',
-      userName: 'demo-user',
-      userDisplayName: 'Demo User',
-    })
+    const primaryAddr = stintWallet.primaryAddress()
+    const sessionAddr = stintWallet.sessionAddress()
 
-    sessionPrivateKey = await derivePrivateKey(credential.id)
+    // Debug: Log addresses to check prefixes
+    console.log('Primary address:', primaryAddr)
+    console.log('Session address:', sessionAddr)
 
-    passkeyStatus.textContent = `✅ Passkey created!\nCredential ID: ${credential.id}\nDerived key ready.`
-    passkeyStatus.className = 'status success'
-    
-    keplrBtn.disabled = false
-  } catch (error) {
-    passkeyStatus.textContent = `❌ Error: ${error}`
-    passkeyStatus.className = 'status error'
-  }
-})
+    // Use the session wallet to send a small amount
+    const recipient = prompt('Enter recipient address (atone1...):', sessionAddr)
+    if (!recipient) return
 
-// Step 2: Connect Keplr
-keplrBtn.addEventListener('click', async () => {
-  try {
-    walletStatus.textContent = 'Connecting to Keplr...'
-    walletStatus.className = 'status'
-
-    if (!window.keplr) {
-      throw new Error('Keplr extension not found')
+    // Validate recipient address has correct prefix
+    if (!recipient.startsWith('atone1')) {
+      throw new Error(
+        `Recipient address must start with "atone1" for AtomOne testnet. Got: ${recipient}`
+      )
     }
 
-    // Using AtomOne testnet
-    const chainId = 'atomone-testnet-1'
-    
-    // Add chain to Keplr if not already added
-    try {
-      await window.keplr.enable(chainId)
-    } catch {
-      // Chain not added, let's add it
-      await window.keplr.experimentalSuggestChain({
-        chainId: chainId,
-        chainName: 'AtomOne Testnet',
-        rpc: 'https://atomone-testnet-1-rpc.allinbits.services',
-        rest: 'https://atomone-testnet-1-api.allinbits.services',
-        bip44: {
-          coinType: 118,
-        },
-        bech32Config: {
-          bech32PrefixAccAddr: 'atone',
-          bech32PrefixAccPub: 'atonepub',
-          bech32PrefixValAddr: 'atonevaloper',
-          bech32PrefixValPub: 'atonevaloperpub',
-          bech32PrefixConsAddr: 'atonevalcons',
-          bech32PrefixConsPub: 'atonevalconspub',
-        },
-        currencies: [
-          {
-            coinDenom: 'ATONE',
-            coinMinimalDenom: 'uatone',
-            coinDecimals: 6,
-          },
+    const amount = prompt('Enter amount in uphoton (max 1000000):', '1000')
+    if (!amount || parseInt(amount) > 1000000) {
+      throw new Error('Invalid amount')
+    }
+
+    // Create an authz exec message
+    const { MsgExec } = await import('cosmjs-types/cosmos/authz/v1beta1/tx')
+    const { Any } = await import('cosmjs-types/google/protobuf/any')
+    const { MsgSend } = await import('cosmjs-types/cosmos/bank/v1beta1/tx')
+
+    const innerSendMsg = MsgSend.fromPartial({
+      fromAddress: primaryAddr, // Funds come from primary wallet
+      toAddress: recipient,
+      amount: [{ denom: 'uphoton', amount }],
+    })
+
+    const execMsg = {
+      typeUrl: '/cosmos.authz.v1beta1.MsgExec',
+      value: MsgExec.fromPartial({
+        grantee: sessionAddr,
+        msgs: [
+          Any.fromPartial({
+            typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+            value: MsgSend.encode(innerSendMsg).finish(),
+          }),
         ],
-        feeCurrencies: [
-          {
-            coinDenom: 'PHOTON',
-            coinMinimalDenom: 'uphoton',
-            coinDecimals: 6,
-            gasPriceStep: {
-              low: 0.001,
-              average: 0.0025,
-              high: 0.004,
-            },
-          },
-        ],
-        stakeCurrency: {
+      }),
+    }
+
+    // Use the session wallet's client - gas will be paid by feegrant!
+    const sessionClient = stintWallet.client
+    const sessionFee = {
+      amount: [{ denom: 'uphoton', amount: '5000' }],
+      gas: '200000',
+      granter: primaryAddr, // Feegrant pays the fees
+    }
+
+    const execResult = await sessionClient.signAndBroadcast(
+      sessionAddr,
+      [execMsg],
+      sessionFee,
+      'Stint session wallet transaction'
+    )
+
+    if (execResult.code !== 0) {
+      throw new Error(`Transaction failed: ${execResult.rawLog}`)
+    }
+
+    transactionStatus.textContent = `✅ Session transaction successful!
+
+Sent ${amount} uphoton to ${recipient}
+Using authz from: ${primaryAddr}
+Signed by session wallet: ${sessionAddr}
+
+Transaction hash: ${execResult.transactionHash}
+
+The session wallet signed this transaction without needing access to your primary wallet!
+Gas was paid by the feegrant from the primary wallet! 🎉`
+    transactionStatus.className = 'status success'
+  } catch (error) {
+    transactionStatus.textContent = `❌ Session transaction error: ${error}`
+    transactionStatus.className = 'status error'
+  }
+}
+
+// Wallet detection and connection
+async function detectAndConnectWallet() {
+  const chainId = 'atomone-testnet-1'
+
+  // Try Keplr first
+  if (window.keplr) {
+    return await connectKeplr(chainId)
+  }
+
+  // Try Leap
+  if (window.leap) {
+    return await connectLeap(chainId)
+  }
+
+  // Try Cosmostation
+  if (window.cosmostation) {
+    return await connectCosmostation(chainId)
+  }
+
+  throw new Error('No supported Cosmos wallet found. Please install Keplr, Leap, or Cosmostation.')
+}
+
+async function connectKeplr(chainId: string) {
+  // Add chain to Keplr if not already added
+  try {
+    await window.keplr.enable(chainId)
+  } catch {
+    // Chain not added, let's add it
+    await window.keplr.experimentalSuggestChain({
+      chainId: chainId,
+      chainName: 'AtomOne Testnet',
+      rpc: 'https://atomone-testnet-1-rpc.allinbits.services',
+      rest: 'https://atomone-testnet-1-api.allinbits.services',
+      bip44: {
+        coinType: 118,
+      },
+      bech32Config: {
+        bech32PrefixAccAddr: 'atone',
+        bech32PrefixAccPub: 'atonepub',
+        bech32PrefixValAddr: 'atonevaloper',
+        bech32PrefixValPub: 'atonevaloperpub',
+        bech32PrefixConsAddr: 'atonevalcons',
+        bech32PrefixConsPub: 'atonevalconspub',
+      },
+      currencies: [
+        {
           coinDenom: 'ATONE',
           coinMinimalDenom: 'uatone',
           coinDecimals: 6,
         },
-      })
-      await window.keplr.enable(chainId)
-    }
+      ],
+      feeCurrencies: [
+        {
+          coinDenom: 'PHOTON',
+          coinMinimalDenom: 'uphoton',
+          coinDecimals: 6,
+          gasPriceStep: {
+            low: 0.001,
+            average: 0.0025,
+            high: 0.004,
+          },
+        },
+      ],
+      stakeCurrency: {
+        coinDenom: 'ATONE',
+        coinMinimalDenom: 'uatone',
+        coinDecimals: 6,
+      },
+    })
+    await window.keplr.enable(chainId)
+  }
 
-    const offlineSigner = window.keplr.getOfflineSigner(chainId)
-    const accounts = await offlineSigner.getAccounts()
+  const offlineSigner = window.keplr.getOfflineSigner(chainId)
+  const accounts = await offlineSigner.getAccounts()
 
-    walletStatus.textContent = `✅ Connected to Keplr!\nAddress: ${accounts[0].address}`
+  return {
+    name: 'Keplr',
+    signer: offlineSigner,
+    address: accounts[0].address,
+  }
+}
+
+async function connectLeap(chainId: string) {
+  await window.leap.enable(chainId)
+  const offlineSigner = window.leap.getOfflineSigner(chainId)
+  const accounts = await offlineSigner.getAccounts()
+
+  return {
+    name: 'Leap',
+    signer: offlineSigner,
+    address: accounts[0].address,
+  }
+}
+
+async function connectCosmostation(chainId: string) {
+  await window.cosmostation.providers.keplr.enable(chainId)
+  const offlineSigner = window.cosmostation.providers.keplr.getOfflineSigner(chainId)
+  const accounts = await offlineSigner.getAccounts()
+
+  return {
+    name: 'Cosmostation',
+    signer: offlineSigner,
+    address: accounts[0].address,
+  }
+}
+
+// Step 1: Connect to Cosmos Wallet
+walletBtn.addEventListener('click', async () => {
+  try {
+    walletStatus.textContent = 'Detecting and connecting to wallet...'
+    walletStatus.className = 'status'
+
+    const wallet = await detectAndConnectWallet()
+
+    // Store the signer and address for later use
+    window.primaryWalletSigner = wallet.signer
+    window.primaryWalletAddress = wallet.address
+
+    walletStatus.textContent = `✅ Connected to ${wallet.name}!\nAddress: ${wallet.address}`
     walletStatus.className = 'status success'
 
-    // Store the signer for later use
-    window.mainWalletSigner = offlineSigner
     sessionBtn.disabled = false
   } catch (error) {
     walletStatus.textContent = `❌ Error: ${error}`
@@ -125,38 +236,34 @@ keplrBtn.addEventListener('click', async () => {
   }
 })
 
-// Step 3: Create Session Wallet
+// Step 2: Create Session Wallet
 sessionBtn.addEventListener('click', async () => {
   try {
-    sessionStatus.textContent = 'Creating session wallet...'
+    sessionStatus.textContent =
+      "Creating session wallet...\n\n👆 Please follow your browser's prompts to create/use a passkey.\nThis may include biometric authentication or device PIN."
     sessionStatus.className = 'status'
 
-    if (!sessionPrivateKey || !window.mainWalletSigner) {
-      throw new Error('Missing prerequisites')
+    if (!window.primaryWalletSigner || !window.primaryWalletAddress) {
+      throw new Error('Please connect a Cosmos wallet first')
     }
 
-    // Create the session wallet from the derived private key
-    const sessionWallet = await createSessionWallet(sessionPrivateKey, 'atone')
-
-    // Initialize stint wallet
-    stintWallet = await initStintWallet(
-      {
-        mainWallet: window.mainWalletSigner,
-        sessionConfig: {
-          chainId: 'atomone-testnet-1',
-          rpcEndpoint: 'https://atomone-testnet-1-rpc.allinbits.services',
-          gasPrice: '0.001uphoton',
-        },
+    // Create the complete Stint session (handles passkey + connection automatically)
+    stintWallet = await newSessionWallet({
+      primaryWallet: window.primaryWalletSigner,
+      prefix: 'atone',
+      sessionConfig: {
+        chainId: 'atomone-testnet-1',
+        rpcEndpoint: 'https://atomone-testnet-1-rpc.allinbits.services',
+        gasPrice: '0.001uphoton',
       },
-      sessionWallet
-    )
+    })
 
-    const sessionAddr = await getSessionAddress(stintWallet)
-    const mainAddr = await getMainAddress(stintWallet)
+    const sessionAddr = stintWallet.sessionAddress()
+    const primaryAddr = stintWallet.primaryAddress()
 
     sessionStatus.textContent = `✅ Session wallet created!
 Session Address: ${sessionAddr}
-Main Address: ${mainAddr}
+Primary Address: ${primaryAddr}
 
 Next steps would be:
 1. Create authz grant and feegrant
@@ -170,78 +277,159 @@ Next steps would be:
   }
 })
 
-// Step 4: Setup Stint (Authz + Feegrant)
+// Step 3: Setup Stint (Authz + Feegrant)
 transactionBtn.addEventListener('click', async () => {
   try {
     transactionStatus.textContent = 'Setting up stint authorization and feegrant...'
     transactionStatus.className = 'status'
 
-    if (!stintWallet || !window.keplr) {
+    if (!stintWallet || !window.primaryWalletSigner) {
       throw new Error('Missing prerequisites')
     }
 
-    // Create stint setup (authz + feegrant)
-    const stintSetup = await createStintSetup(stintWallet, {
-      sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      spendLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON spending limit
-      gasLimit: { denom: 'uphoton', amount: '1000000' } // 1 PHOTON gas limit
-    })
+    const primaryAddr = stintWallet.primaryAddress()
+    const sessionAddr = stintWallet.sessionAddress()
 
-    const mainAddr = await getMainAddress(stintWallet)
-    const sessionAddr = await getSessionAddress(stintWallet)
+    transactionStatus.textContent = `Checking existing authorizations...`
 
-    transactionStatus.textContent = `Creating transaction with:
-- Authz grant: 1 PHOTON spending limit, 24h expiry
-- Feegrant: 1 PHOTON gas limit, 24h expiry
+    // Connect to the chain with the primary wallet for broadcasting
+    const offlineSigner = window.primaryWalletSigner
 
-Broadcasting...`
-
-    // Connect to the chain with Keplr for broadcasting
-    const chainId = 'atomone-testnet-1'
-    const offlineSigner = window.keplr.getOfflineSigner(chainId)
-    
-    // Import SigningStargateClient for main wallet transactions
+    // Import SigningStargateClient for primary wallet transactions
     const { SigningStargateClient } = await import('@cosmjs/stargate')
-    const { MsgSend } = await import('cosmjs-types/cosmos/bank/v1beta1/tx')
-    
-    const mainClient = await SigningStargateClient.connectWithSigner(
+
+    const primaryClient = await SigningStargateClient.connectWithSigner(
       'https://atomone-testnet-1-rpc.allinbits.services',
       offlineSigner,
       {
         gasPrice: {
           denom: 'uphoton',
-          amount: { toString: () => '0.001', valueOf: () => 0.001 } as any
-        }
+          amount: { toString: () => '0.001', valueOf: () => 0.001 } as any,
+        },
       }
     )
 
-    // Transaction: Main wallet grants authz + feegrant to session wallet
-    transactionStatus.textContent += '\n\nSetting up stint with authz and feegrant...'
-    
-    const mainMessages = [
-      {
+    // Check if authz grant already exists
+    let hasAuthzGrant = false
+    let hasFeegrant = false
+
+    try {
+      // Check for existing authz grant
+      const authzResponse = await fetch(
+        `https://atomone-testnet-1-api.allinbits.services/cosmos/authz/v1beta1/grants?granter=${primaryAddr}&grantee=${sessionAddr}&msg_type_url=/cosmos.bank.v1beta1.MsgSend`
+      )
+      if (authzResponse.ok) {
+        const authzData = await authzResponse.json()
+        hasAuthzGrant = authzData.grants && authzData.grants.length > 0
+      }
+
+      // Check for existing feegrant
+      const feegrantResponse = await fetch(
+        `https://atomone-testnet-1-api.allinbits.services/cosmos/feegrant/v1beta1/allowance/${primaryAddr}/${sessionAddr}`
+      )
+      if (feegrantResponse.ok) {
+        const feegrantData = await feegrantResponse.json()
+        hasFeegrant = !!feegrantData.allowance
+      }
+    } catch (error) {
+      console.log('Error checking existing grants, will proceed with creation:', error)
+    }
+
+    if (hasAuthzGrant && hasFeegrant) {
+      transactionStatus.textContent = `✅ Authorizations already exist!
+
+Existing authz grant: ${primaryAddr} → ${sessionAddr}
+Existing feegrant: ${primaryAddr} → ${sessionAddr}
+
+Session wallet is ready to use!`
+      transactionStatus.className = 'status success'
+
+      // Add the test send button
+      const testSendBtn = document.createElement('button')
+      testSendBtn.textContent = 'Test Session Send'
+      testSendBtn.style.marginTop = '1rem'
+      transactionStatus.appendChild(document.createElement('br'))
+      transactionStatus.appendChild(testSendBtn)
+
+      testSendBtn.addEventListener('click', testSessionSend)
+      return
+    }
+
+    // Create stint setup (authz + feegrant) only if needed
+    const stintSetup = await createStintSetup(stintWallet, {
+      sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      spendLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON spending limit
+      gasLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON gas limit
+    })
+
+    const messagesToSend = []
+    let statusText = 'Creating transaction with:\n'
+
+    if (!hasAuthzGrant) {
+      messagesToSend.push({
         typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
         value: stintSetup.authzGrant,
-      },
-      {
+      })
+      statusText += '- Authz grant: 1 PHOTON spending limit, 24h expiry\n'
+    } else {
+      statusText += '- Authz grant: ✅ Already exists\n'
+    }
+
+    if (!hasFeegrant) {
+      messagesToSend.push({
         typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance',
         value: stintSetup.feegrant,
-      },
-    ]
-
-    const mainGasEstimate = await mainClient.simulate(mainAddr, mainMessages, '')
-    const mainFee = {
-      amount: [{ denom: 'uphoton', amount: '3000' }],
-      gas: Math.ceil(mainGasEstimate * 1.5).toString(), // Increased buffer
+      })
+      statusText += '- Feegrant: 1 PHOTON gas limit, 24h expiry\n'
+    } else {
+      statusText += '- Feegrant: ✅ Already exists\n'
     }
 
-    const mainResult = await mainClient.signAndBroadcast(mainAddr, mainMessages, mainFee, 'Stint setup: authz + feegrant')
+    statusText += '\nBroadcasting...'
+    transactionStatus.textContent = statusText
 
-    if (mainResult.code !== 0) {
-      throw new Error(`Stint setup transaction failed: ${mainResult.events}`)
+    // Only proceed if we have messages to send
+    if (messagesToSend.length === 0) {
+      transactionStatus.textContent = `✅ All authorizations already exist!
+
+Authz grant: ✅ Already exists
+Feegrant: ✅ Already exists
+
+Session wallet is ready to use!`
+      transactionStatus.className = 'status success'
+
+      // Add the test send button
+      const testSendBtn = document.createElement('button')
+      testSendBtn.textContent = 'Test Session Send'
+      testSendBtn.style.marginTop = '1rem'
+      transactionStatus.appendChild(document.createElement('br'))
+      transactionStatus.appendChild(testSendBtn)
+
+      testSendBtn.addEventListener('click', testSessionSend)
+      return
     }
 
-    const result = { transactionHash: mainResult.transactionHash, height: mainResult.height }
+    // Transaction: Main wallet grants authz + feegrant to session wallet
+    transactionStatus.textContent += '\n\nSetting up stint with authz and feegrant...'
+
+    const primaryGasEstimate = await primaryClient.simulate(primaryAddr, messagesToSend, '')
+    const primaryFee = {
+      amount: [{ denom: 'uphoton', amount: '10000' }],
+      gas: Math.ceil(primaryGasEstimate * 1.5).toString(), // Increased buffer
+    }
+
+    const primaryResult = await primaryClient.signAndBroadcast(
+      primaryAddr,
+      messagesToSend,
+      primaryFee,
+      'Stint setup: authz + feegrant'
+    )
+
+    if (primaryResult.code !== 0) {
+      throw new Error(`Stint setup transaction failed: ${primaryResult.events}`)
+    }
+
+    const result = { transactionHash: primaryResult.transactionHash, height: primaryResult.height }
 
     transactionStatus.textContent = `✅ Stint setup complete!
 
@@ -253,7 +441,7 @@ Session wallet ${sessionAddr} can now:
 - Use up to 1 PHOTON for gas fees (via feegrant)
 - Does NOT hold any funds!
 
-All gas fees and transactions are paid by: ${mainAddr}
+All gas fees and transactions are paid by: ${primaryAddr}
 
 Try sending a transaction with the session wallet!`
     transactionStatus.className = 'status success'
@@ -265,88 +453,20 @@ Try sending a transaction with the session wallet!`
     transactionStatus.appendChild(document.createElement('br'))
     transactionStatus.appendChild(testSendBtn)
 
-    testSendBtn.addEventListener('click', async () => {
-      try {
-        transactionStatus.textContent = 'Sending transaction with session wallet...'
-        transactionStatus.className = 'status'
-
-        // Use the session wallet to send a small amount
-        const recipient = prompt('Enter recipient address (atone1...):', sessionAddr)
-        if (!recipient) return
-
-        const amount = prompt('Enter amount in uphoton (max 1000000):', '1000')
-        if (!amount || parseInt(amount) > 1000000) {
-          throw new Error('Invalid amount')
-        }
-
-        // Create an authz exec message
-        const { MsgExec } = await import('cosmjs-types/cosmos/authz/v1beta1/tx')
-        const { Any } = await import('cosmjs-types/google/protobuf/any')
-
-        const innerSendMsg = MsgSend.fromPartial({
-          fromAddress: mainAddr, // Funds come from main wallet
-          toAddress: recipient,
-          amount: [{ denom: 'uphoton', amount }],
-        })
-
-        const execMsg = {
-          typeUrl: '/cosmos.authz.v1beta1.MsgExec',
-          value: MsgExec.fromPartial({
-            grantee: sessionAddr,
-            msgs: [
-              Any.fromPartial({
-                typeUrl: '/cosmos.bank.v1beta1.MsgSend',
-                value: MsgSend.encode(innerSendMsg).finish(),
-              }),
-            ],
-          }),
-        }
-
-        // Use the session wallet's client - gas will be paid by feegrant!
-        const sessionClient = stintWallet.client
-        const sessionFee = {
-          amount: [{ denom: 'uphoton', amount: '1000' }],
-          gas: '200000',
-          granter: mainAddr, // Feegrant pays the fees
-        }
-
-        const execResult = await sessionClient.signAndBroadcast(
-          sessionAddr,
-          [execMsg],
-          sessionFee,
-          'Stint session wallet transaction'
-        )
-
-        if (execResult.code !== 0) {
-          throw new Error(`Transaction failed: ${execResult.rawLog}`)
-        }
-
-        transactionStatus.textContent = `✅ Session transaction successful!
-
-Sent ${amount} uphoton to ${recipient}
-Using authz from: ${mainAddr}
-Signed by session wallet: ${sessionAddr}
-
-Transaction hash: ${execResult.transactionHash}
-
-The session wallet signed this transaction without needing access to your main wallet!
-Gas was paid by the feegrant from the main wallet! 🎉`
-        transactionStatus.className = 'status success'
-      } catch (error) {
-        transactionStatus.textContent = `❌ Session transaction error: ${error}`
-        transactionStatus.className = 'status error'
-      }
-    })
+    testSendBtn.addEventListener('click', testSessionSend)
   } catch (error) {
     transactionStatus.textContent = `❌ Error: ${error}`
     transactionStatus.className = 'status error'
   }
 })
 
-// Add TypeScript declarations for Keplr
+// Add TypeScript declarations for Cosmos wallets
 declare global {
   interface Window {
-    keplr: any
-    mainWalletSigner: any
+    keplr?: any
+    leap?: any
+    cosmostation?: any
+    primaryWalletSigner: any
+    primaryWalletAddress: string
   }
 }

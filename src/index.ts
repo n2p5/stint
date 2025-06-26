@@ -1,35 +1,22 @@
-// Wallet functions
-export {
-  createSessionWallet,
-  initStintWallet,
-  getSessionAddress,
-  getMainAddress
-} from './wallet'
-
 // Passkey functions
-export {
-  createPasskeyCredential,
-  derivePrivateKey,
-  getPasskeyPRF
-} from './passkey'
+export { getOrCreatePasskeyWallet } from './passkey'
 
-// Stint functions (authz + feegrant)
+// Stint functions (wallet creation, authz + feegrant)
 export {
+  newSessionWallet,
   createAuthzGrantMsg,
   createStintSetup,
   revokeStint,
   createSendAuthorization,
-  createGenericAuthorization
+  createGenericAuthorization,
 } from './stint'
 
 // Types
-export type {
-  SessionWallet
-} from './wallet'
-
-export type {
-  StintWalletOptions,
-  SessionWalletConfig,
-  StintConfig,
-  PasskeyCredential
+export type { 
+  SessionWallet, 
+  StintWalletOptions, 
+  SessionWalletConfig, 
+  StintConfig 
 } from './types'
+
+export type { PasskeyWallet, PasskeyOptions } from './passkey'

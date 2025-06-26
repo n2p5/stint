@@ -1,4 +1,5 @@
-import { OfflineSigner } from '@cosmjs/proto-signing'
+import { OfflineSigner, DirectSecp256k1Wallet } from '@cosmjs/proto-signing'
+import { SigningStargateClient } from '@cosmjs/stargate'
 
 export interface PasskeyCredential {
   id: string
@@ -27,8 +28,18 @@ export interface SessionWalletConfig {
 }
 
 export interface StintWalletOptions {
-  mainWallet: OfflineSigner
+  primaryWallet: OfflineSigner
   sessionConfig: SessionWalletConfig
   authzExpiration?: Date
   gasBuffer?: number
+}
+
+export interface SessionWallet {
+  primaryWallet: OfflineSigner
+  sessionWallet: DirectSecp256k1Wallet
+  client: SigningStargateClient
+  
+  // Methods - synchronous with cached addresses
+  primaryAddress(): string
+  sessionAddress(): string
 }

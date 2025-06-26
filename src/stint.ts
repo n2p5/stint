@@ -1,3 +1,6 @@
+import { SigningStargateClient, GasPrice } from '@cosmjs/stargate'
+import { DirectSecp256k1Wallet, OfflineSigner } from '@cosmjs/proto-signing'
+import { fromHex } from '@cosmjs/encoding'
 import { MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
@@ -6,17 +9,84 @@ import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
-import { SessionWallet } from './wallet'
+import { SessionWalletConfig, SessionWallet } from './types'
+import { getOrCreatePasskeyWallet } from './passkey'
+
+// ============================================================================
+// SESSION WALLET CREATION
+// ============================================================================
+
+/**
+ * Create a complete session wallet in one step
+ * Combines passkey creation, wallet derivation, and chain connection
+ * @param config - Complete configuration object containing all required and optional parameters
+ * @returns Initialized SessionWallet ready for use
+ */
+export async function newSessionWallet(config: {
+  primaryWallet: OfflineSigner
+  sessionConfig: SessionWalletConfig
+  prefix?: string
+  saltName?: string
+}): Promise<SessionWallet> {
+  // Get the primary wallet address
+  const primaryAccounts = await config.primaryWallet.getAccounts()
+  const primaryAddress = primaryAccounts[0].address
+
+  // Get or create passkey wallet for this primary address
+  const passkeyWallet = await getOrCreatePasskeyWallet({
+    walletAddress: primaryAddress,
+    displayName: `Stint: ${primaryAddress.slice(0, 10)}...`,
+    saltName: config.saltName || 'stint-wallet',
+  })
+
+  // Create the session wallet from the derived private key
+  const privateKey = fromHex(passkeyWallet.privateKey)
+  const sessionWallet = await DirectSecp256k1Wallet.fromKey(privateKey, config.prefix || 'atom1')
+
+  // Get the session wallet address
+  const sessionAccounts = await sessionWallet.getAccounts()
+  const sessionAddress = sessionAccounts[0].address
+
+  // Connect to the chain
+  const client = await SigningStargateClient.connectWithSigner(
+    config.sessionConfig.rpcEndpoint,
+    sessionWallet,
+    {
+      gasPrice: GasPrice.fromString(config.sessionConfig.gasPrice),
+    }
+  )
+
+  const wallet = {
+    primaryWallet: config.primaryWallet,
+    sessionWallet,
+    client,
+    
+    // Methods - now synchronous with cached addresses
+    primaryAddress(): string {
+      return primaryAddress
+    },
+    
+    sessionAddress(): string {
+      return sessionAddress
+    },
+  }
+  
+  return wallet
+}
+
+// ============================================================================
+// AUTHZ AND FEEGRANT UTILITIES
+// ============================================================================
 
 // Create a send authorization
 export function createSendAuthorization(spendLimit?: Coin[]): Any {
   const authorizationData: any = {}
-  
+
   // Only set spendLimit if it's provided and not empty
   if (spendLimit && spendLimit.length > 0) {
     authorizationData.spendLimit = spendLimit
   }
-  
+
   const authorization = SendAuthorization.fromPartial(authorizationData)
 
   return Any.fromPartial({
@@ -52,7 +122,7 @@ export function createAuthzGrantMsg(
   expiration?: Date
 ): MsgGrant {
   const expirationDate = expiration || new Date(Date.now() + 24 * 60 * 60 * 1000) // Default 24 hours
-  
+
   return {
     granter,
     grantee,
@@ -101,33 +171,29 @@ export async function createStintSetup(
   authzGrant: MsgGrant
   feegrant: MsgGrantAllowance
 }> {
-  const mainAddress = await wallet.mainWallet.getAccounts().then(accounts => accounts[0].address)
-  const sessionAddress = await wallet.sessionWallet.getAccounts().then(accounts => accounts[0].address)
+  const primaryAddress = wallet.primaryAddress()
+  const sessionAddress = wallet.sessionAddress()
 
-  // Main wallet grants session wallet limited send authorization
+  // Primary wallet grants session wallet limited send authorization
   const spendLimitCoins: Coin[] = config.spendLimit
     ? [Coin.fromPartial({ denom: config.spendLimit.denom, amount: config.spendLimit.amount })]
     : [Coin.fromPartial({ denom: 'uphoton', amount: '1000000' })] // Default 1 PHOTON limit
-  
+
   const sendAuth = createSendAuthorization(spendLimitCoins)
   const authzGrant = createAuthzGrantMsg(
-    mainAddress,
+    primaryAddress,
     sessionAddress,
     sendAuth,
     config.sessionExpiration
   )
 
-  // Main wallet grants session wallet fee allowance
+  // Primary wallet grants session wallet fee allowance
   const gasLimitCoins: Coin[] = config.gasLimit
     ? [Coin.fromPartial({ denom: config.gasLimit.denom, amount: config.gasLimit.amount })]
     : [Coin.fromPartial({ denom: 'uphoton', amount: '1000000' })] // Default 1 UPHOTON for gas
-  
+
   const feeAllowance = createBasicAllowance(gasLimitCoins, config.sessionExpiration)
-  const feegrant = createFeegrantMsg(
-    mainAddress,
-    sessionAddress,
-    feeAllowance
-  )
+  const feegrant = createFeegrantMsg(primaryAddress, sessionAddress, feeAllowance)
 
   return {
     authzGrant,
@@ -136,11 +202,7 @@ export async function createStintSetup(
 }
 
 // Revoke an authz grant
-export function createRevokeMsg(
-  granter: string,
-  grantee: string,
-  msgTypeUrl: string
-): MsgRevoke {
+export function createRevokeMsg(granter: string, grantee: string, msgTypeUrl: string): MsgRevoke {
   return {
     granter,
     grantee,
@@ -149,10 +211,7 @@ export function createRevokeMsg(
 }
 
 // Create a feegrant revoke message
-export function createFeegrantRevokeMsg(
-  granter: string,
-  grantee: string
-): MsgRevokeAllowance {
+export function createFeegrantRevokeMsg(granter: string, grantee: string): MsgRevokeAllowance {
   return {
     granter,
     grantee,
@@ -167,11 +226,11 @@ export async function revokeStint(
   revokeAuthz: MsgRevoke
   revokeFeegrant: MsgRevokeAllowance
 }> {
-  const mainAddress = await wallet.mainWallet.getAccounts().then(accounts => accounts[0].address)
-  const sessionAddress = await wallet.sessionWallet.getAccounts().then(accounts => accounts[0].address)
+  const primaryAddress = wallet.primaryAddress()
+  const sessionAddress = wallet.sessionAddress()
 
   return {
-    revokeAuthz: createRevokeMsg(mainAddress, sessionAddress, msgTypeUrl),
-    revokeFeegrant: createFeegrantRevokeMsg(mainAddress, sessionAddress),
+    revokeAuthz: createRevokeMsg(primaryAddress, sessionAddress, msgTypeUrl),
+    revokeFeegrant: createFeegrantRevokeMsg(primaryAddress, sessionAddress),
   }
 }
