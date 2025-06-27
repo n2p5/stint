@@ -17,21 +17,22 @@ export interface StintConfig {
     denom: string
     amount: string
   }
+  allowedRecipients?: string[]
 }
 
 export interface SessionWalletConfig {
-  chainId: string
-  rpcEndpoint: string
-  gasPrice: string
-  gasLimit?: string
-  prefix?: string
+  primaryClient: SigningStargateClient
+  saltName?: string
 }
 
-export interface StintWalletOptions {
-  primaryWallet: OfflineSigner
-  sessionConfig: SessionWalletConfig
-  authzExpiration?: Date
-  gasBuffer?: number
+export interface AuthzGrantInfo {
+  authorization: any
+  expiration?: Date
+}
+
+export interface FeegrantInfo {
+  allowance: any
+  expiration?: Date
 }
 
 export interface SessionWallet {
@@ -42,4 +43,8 @@ export interface SessionWallet {
   // Methods - synchronous with cached addresses
   primaryAddress(): string
   sessionAddress(): string
+  
+  // Methods - asynchronous grant checking
+  hasAuthzGrant(messageType?: string): Promise<AuthzGrantInfo | null>
+  hasFeegrant(): Promise<FeegrantInfo | null>
 }
