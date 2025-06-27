@@ -21,7 +21,7 @@
     "dev:example": "pnpm --filter stint-example-dither-post-demo dev",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src examples --ext ts,tsx",
-    "format": "prettier --write \"src/**/*.ts\" \"examples/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"examples/**/src/**/*.ts\"",
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage"

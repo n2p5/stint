@@ -33,7 +33,7 @@ jobs:
         run: pnpm lint
 
       - name: Check formatting
-        run: npx prettier --check "src/**/*.ts" "examples/**/*.ts"
+        run: npx prettier --check "src/**/*.ts" "examples/**/src/**/*.ts"
 
       - name: Run tests
         run: pnpm test
