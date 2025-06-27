@@ -43,8 +43,8 @@ async function testSessionSend() {
       )
     }
 
-    const amount = prompt('Enter amount in uphoton (max 1000000):', '1000')
-    if (!amount || parseInt(amount) > 1000000) {
+    const amount = prompt('Enter amount in uphoton (max 10000000):', '1000')
+    if (!amount || parseInt(amount) > 10000000) {
       throw new Error('Invalid amount')
     }
 
@@ -247,15 +247,23 @@ sessionBtn.addEventListener('click', async () => {
       throw new Error('Please connect a Cosmos wallet first')
     }
 
+    // First create a SigningStargateClient with the primary wallet
+    const { SigningStargateClient } = await import('@cosmjs/stargate')
+    const primaryClient = await SigningStargateClient.connectWithSigner(
+      'https://atomone-testnet-1-rpc.allinbits.services',
+      window.primaryWalletSigner,
+      {
+        gasPrice: {
+          denom: 'uphoton',
+          amount: { toString: () => '0.001', valueOf: () => 0.001 } as any,
+        },
+      }
+    )
+
     // Create the complete Stint session (handles passkey + connection automatically)
     stintWallet = await newSessionWallet({
-      primaryWallet: window.primaryWalletSigner,
-      prefix: 'atone',
-      sessionConfig: {
-        chainId: 'atomone-testnet-1',
-        rpcEndpoint: 'https://atomone-testnet-1-rpc.allinbits.services',
-        gasPrice: '0.001uphoton',
-      },
+      primaryClient,
+      saltName: 'stint-wallet',
     })
 
     const sessionAddr = stintWallet.sessionAddress()
@@ -309,31 +317,12 @@ transactionBtn.addEventListener('click', async () => {
       }
     )
 
-    // Check if authz grant already exists
-    let hasAuthzGrant = false
-    let hasFeegrant = false
-
-    try {
-      // Check for existing authz grant
-      const authzResponse = await fetch(
-        `https://atomone-testnet-1-api.allinbits.services/cosmos/authz/v1beta1/grants?granter=${primaryAddr}&grantee=${sessionAddr}&msg_type_url=/cosmos.bank.v1beta1.MsgSend`
-      )
-      if (authzResponse.ok) {
-        const authzData = await authzResponse.json()
-        hasAuthzGrant = authzData.grants && authzData.grants.length > 0
-      }
-
-      // Check for existing feegrant
-      const feegrantResponse = await fetch(
-        `https://atomone-testnet-1-api.allinbits.services/cosmos/feegrant/v1beta1/allowance/${primaryAddr}/${sessionAddr}`
-      )
-      if (feegrantResponse.ok) {
-        const feegrantData = await feegrantResponse.json()
-        hasFeegrant = !!feegrantData.allowance
-      }
-    } catch (error) {
-      console.log('Error checking existing grants, will proceed with creation:', error)
-    }
+    // Check if authz grant and feegrant already exist using wallet methods
+    const authzGrantInfo = await stintWallet.hasAuthzGrant()
+    const feegrantInfo = await stintWallet.hasFeegrant()
+    
+    const hasAuthzGrant = !!authzGrantInfo
+    const hasFeegrant = !!feegrantInfo
 
     if (hasAuthzGrant && hasFeegrant) {
       transactionStatus.textContent = `✅ Authorizations already exist!
@@ -358,8 +347,9 @@ Session wallet is ready to use!`
     // Create stint setup (authz + feegrant) only if needed
     const stintSetup = await createStintSetup(stintWallet, {
       sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      spendLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON spending limit
-      gasLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON gas limit
+      spendLimit: { denom: 'uphoton', amount: '10000000' }, // 10 PHOTON spending limit
+      gasLimit: { denom: 'uphoton', amount: '10000000' }, // 10 PHOTON gas limit
+      // allowedRecipients: ['atone1abc...', 'atone1def...'], // Optional: restrict sends to specific addresses
     })
 
     const messagesToSend = []
@@ -370,7 +360,7 @@ Session wallet is ready to use!`
         typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
         value: stintSetup.authzGrant,
       })
-      statusText += '- Authz grant: 1 PHOTON spending limit, 24h expiry\n'
+      statusText += '- Authz grant: 10 PHOTON spending limit, 24h expiry\n'
     } else {
       statusText += '- Authz grant: ✅ Already exists\n'
     }
@@ -380,7 +370,7 @@ Session wallet is ready to use!`
         typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance',
         value: stintSetup.feegrant,
       })
-      statusText += '- Feegrant: 1 PHOTON gas limit, 24h expiry\n'
+      statusText += '- Feegrant: 10 PHOTON gas limit, 24h expiry\n'
     } else {
       statusText += '- Feegrant: ✅ Already exists\n'
     }
@@ -437,8 +427,8 @@ Transaction hash: ${result.transactionHash}
 Height: ${result.height}
 
 Session wallet ${sessionAddr} can now:
-- Send up to 1 PHOTON using authz
-- Use up to 1 PHOTON for gas fees (via feegrant)
+- Send up to 10 PHOTON using authz
+- Use up to 10 PHOTON for gas fees (via feegrant)
 - Does NOT hold any funds!
 
 All gas fees and transactions are paid by: ${primaryAddr}

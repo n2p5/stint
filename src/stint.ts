@@ -1,15 +1,14 @@
-import { SigningStargateClient, GasPrice } from '@cosmjs/stargate'
+import { SigningStargateClient } from '@cosmjs/stargate'
 import { DirectSecp256k1Wallet, OfflineSigner } from '@cosmjs/proto-signing'
 import { fromHex } from '@cosmjs/encoding'
 import { MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
-import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
 import { MsgGrantAllowance, MsgRevokeAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
 import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
-import { SessionWalletConfig, SessionWallet } from './types'
+import { SessionWallet, SessionWalletConfig, AuthzGrantInfo, FeegrantInfo } from './types'
 import { getOrCreatePasskeyWallet } from './passkey'
 
 // ============================================================================
@@ -19,18 +18,21 @@ import { getOrCreatePasskeyWallet } from './passkey'
 /**
  * Create a complete session wallet in one step
  * Combines passkey creation, wallet derivation, and chain connection
- * @param config - Complete configuration object containing all required and optional parameters
+ * @param config - Configuration with primary client and optional salt name
  * @returns Initialized SessionWallet ready for use
  */
-export async function newSessionWallet(config: {
-  primaryWallet: OfflineSigner
-  sessionConfig: SessionWalletConfig
-  prefix?: string
-  saltName?: string
-}): Promise<SessionWallet> {
-  // Get the primary wallet address
-  const primaryAccounts = await config.primaryWallet.getAccounts()
+export async function newSessionWallet(config: SessionWalletConfig): Promise<SessionWallet> {
+  // Extract the signer from the client and get accounts
+  const primaryWallet = (config.primaryClient as any).signer as OfflineSigner
+  if (!primaryWallet) {
+    throw new Error('Could not extract signer from primary client')
+  }
+
+  const primaryAccounts = await primaryWallet.getAccounts()
   const primaryAddress = primaryAccounts[0].address
+
+  // Extract prefix from primary address (e.g., 'atone' from 'atone1...')
+  const prefix = primaryAddress.match(/^([a-z]+)1/)?.[1] || 'atom'
 
   // Get or create passkey wallet for this primary address
   const passkeyWallet = await getOrCreatePasskeyWallet({
@@ -39,124 +41,147 @@ export async function newSessionWallet(config: {
     saltName: config.saltName || 'stint-wallet',
   })
 
-  // Create the session wallet from the derived private key
+  // Create the session wallet from the derived private key with same prefix as primary
   const privateKey = fromHex(passkeyWallet.privateKey)
-  const sessionWallet = await DirectSecp256k1Wallet.fromKey(privateKey, config.prefix || 'atom1')
+  const sessionWallet = await DirectSecp256k1Wallet.fromKey(privateKey, prefix)
 
   // Get the session wallet address
   const sessionAccounts = await sessionWallet.getAccounts()
   const sessionAddress = sessionAccounts[0].address
 
-  // Connect to the chain
-  const client = await SigningStargateClient.connectWithSigner(
-    config.sessionConfig.rpcEndpoint,
-    sessionWallet,
-    {
-      gasPrice: GasPrice.fromString(config.sessionConfig.gasPrice),
-    }
-  )
+  // Extract RPC URL from the primary client's cometClient
+  const rpcUrl = (config.primaryClient as any).cometClient.client.url
+  if (!rpcUrl) {
+    throw new Error('Could not extract RPC URL from primary client')
+  }
 
-  const wallet = {
-    primaryWallet: config.primaryWallet,
+  // Create a new client for the session wallet using the same RPC endpoint as primary
+  const client = await SigningStargateClient.connectWithSigner(rpcUrl, sessionWallet, {
+    gasPrice: (config.primaryClient as any).gasPrice,
+  })
+
+  const wallet: SessionWallet = {
+    primaryWallet,
     sessionWallet,
     client,
-    
+
     // Methods - now synchronous with cached addresses
-    primaryAddress(): string {
+    primaryAddress: (): string => {
       return primaryAddress
     },
-    
-    sessionAddress(): string {
+
+    sessionAddress: (): string => {
       return sessionAddress
     },
+
+    // Methods - created by factory functions
+    hasAuthzGrant: createHasAuthzGrant(config.primaryClient, primaryAddress, sessionAddress),
+    hasFeegrant: createHasFeegrant(config.primaryClient, primaryAddress, sessionAddress),
   }
-  
+
   return wallet
+}
+
+// ============================================================================
+// GRANT CHECKING FACTORY FUNCTIONS
+// ============================================================================
+
+// Type aliases for clarity
+type HasAuthzGrantFn = (messageType?: string) => Promise<AuthzGrantInfo | null>
+type HasFeegrantFn = () => Promise<FeegrantInfo | null>
+
+// Factory function for hasAuthzGrant method
+function createHasAuthzGrant(
+  primaryClient: SigningStargateClient,
+  primaryAddress: string,
+  sessionAddress: string
+): HasAuthzGrantFn {
+  return async (
+    messageType: string = '/cosmos.bank.v1beta1.MsgSend'
+  ): Promise<AuthzGrantInfo | null> => {
+    try {
+      const rpcUrl = (primaryClient as any).cometClient?.client?.url
+      if (!rpcUrl) {
+        console.warn('Could not extract RPC URL for authz grant check')
+        return null
+      }
+
+      const restUrl = rpcUrl.replace(':26657', ':1317').replace('rpc', 'api')
+
+      const response = await fetch(
+        `${restUrl}/cosmos/authz/v1beta1/grants?granter=${primaryAddress}&grantee=${sessionAddress}&msg_type_url=${messageType}`
+      )
+
+      if (!response.ok) {
+        return null
+      }
+
+      const data = await response.json()
+      if (!data.grants || data.grants.length === 0) {
+        return null
+      }
+
+      const grant = data.grants[0]
+      return {
+        authorization: grant.authorization,
+        expiration: grant.expiration ? new Date(grant.expiration) : undefined,
+      }
+    } catch (error) {
+      console.warn('Error checking authz grant:', error)
+      return null
+    }
+  }
+}
+
+// Factory function for hasFeegrant method
+function createHasFeegrant(
+  primaryClient: SigningStargateClient,
+  primaryAddress: string,
+  sessionAddress: string
+): HasFeegrantFn {
+  return async (): Promise<FeegrantInfo | null> => {
+    try {
+      const rpcUrl = (primaryClient as any).cometClient?.client?.url
+      if (!rpcUrl) {
+        console.warn('Could not extract RPC URL for feegrant check')
+        return null
+      }
+
+      const restUrl = rpcUrl.replace(':26657', ':1317').replace('rpc', 'api')
+
+      const response = await fetch(
+        `${restUrl}/cosmos/feegrant/v1beta1/allowance/${primaryAddress}/${sessionAddress}`
+      )
+
+      if (!response.ok) {
+        return null
+      }
+
+      const data = await response.json()
+      if (!data.allowance) {
+        return null
+      }
+
+      return {
+        allowance: data.allowance,
+        expiration: data.allowance.expiration ? new Date(data.allowance.expiration) : undefined,
+      }
+    } catch (error) {
+      console.warn('Error checking feegrant:', error)
+      return null
+    }
+  }
 }
 
 // ============================================================================
 // AUTHZ AND FEEGRANT UTILITIES
 // ============================================================================
 
-// Create a send authorization
-export function createSendAuthorization(spendLimit?: Coin[]): Any {
-  const authorizationData: any = {}
-
-  // Only set spendLimit if it's provided and not empty
-  if (spendLimit && spendLimit.length > 0) {
-    authorizationData.spendLimit = spendLimit
-  }
-
-  const authorization = SendAuthorization.fromPartial(authorizationData)
-
-  return Any.fromPartial({
-    typeUrl: '/cosmos.bank.v1beta1.SendAuthorization',
-    value: SendAuthorization.encode(authorization).finish(),
-  })
-}
-
-// Create a generic authorization for any message type
-export function createGenericAuthorization(msgTypeUrl: string): Any {
-  const authorization = GenericAuthorization.fromPartial({
-    msg: msgTypeUrl,
-  })
-
-  return Any.fromPartial({
-    typeUrl: '/cosmos.authz.v1beta1.GenericAuthorization',
-    value: GenericAuthorization.encode(authorization).finish(),
-  })
-}
-
 // Convert Date to protobuf Timestamp
 function dateToTimestamp(date: Date): Timestamp {
   const seconds = Math.floor(date.getTime() / 1000)
   const nanos = (date.getTime() % 1000) * 1000000
   return Timestamp.fromPartial({ seconds: BigInt(seconds), nanos })
-}
-
-// Create an authz grant message
-export function createAuthzGrantMsg(
-  granter: string,
-  grantee: string,
-  authorization: Any,
-  expiration?: Date
-): MsgGrant {
-  const expirationDate = expiration || new Date(Date.now() + 24 * 60 * 60 * 1000) // Default 24 hours
-
-  return {
-    granter,
-    grantee,
-    grant: {
-      authorization,
-      expiration: dateToTimestamp(expirationDate),
-    },
-  }
-}
-
-// Create a basic fee allowance
-export function createBasicAllowance(spendLimit?: Coin[], expiration?: Date): Any {
-  const allowance = BasicAllowance.fromPartial({
-    spendLimit,
-    expiration: expiration ? dateToTimestamp(expiration) : undefined,
-  })
-
-  return Any.fromPartial({
-    typeUrl: '/cosmos.feegrant.v1beta1.BasicAllowance',
-    value: BasicAllowance.encode(allowance).finish(),
-  })
-}
-
-// Create a feegrant message
-export function createFeegrantMsg(
-  granter: string,
-  grantee: string,
-  allowance: Any
-): MsgGrantAllowance {
-  return {
-    granter,
-    grantee,
-    allowance,
-  }
 }
 
 // Create combined stint setup (authz + feegrant)
@@ -166,6 +191,7 @@ export async function createStintSetup(
     sessionExpiration?: Date
     spendLimit?: { denom: string; amount: string }
     gasLimit?: { denom: string; amount: string }
+    allowedRecipients?: string[]
   }
 ): Promise<{
   authzGrant: MsgGrant
@@ -177,44 +203,56 @@ export async function createStintSetup(
   // Primary wallet grants session wallet limited send authorization
   const spendLimitCoins: Coin[] = config.spendLimit
     ? [Coin.fromPartial({ denom: config.spendLimit.denom, amount: config.spendLimit.amount })]
-    : [Coin.fromPartial({ denom: 'uphoton', amount: '1000000' })] // Default 1 PHOTON limit
+    : [Coin.fromPartial({ denom: 'uphoton', amount: '10000000' })] // Default 10 PHOTON limit
 
-  const sendAuth = createSendAuthorization(spendLimitCoins)
-  const authzGrant = createAuthzGrantMsg(
-    primaryAddress,
-    sessionAddress,
-    sendAuth,
-    config.sessionExpiration
-  )
+  // Create send authorization inline
+  const authorizationData: any = {}
+  if (spendLimitCoins && spendLimitCoins.length > 0) {
+    authorizationData.spendLimit = spendLimitCoins
+  }
+  if (config.allowedRecipients && config.allowedRecipients.length > 0) {
+    authorizationData.allowList = config.allowedRecipients
+  }
+  const authorization = SendAuthorization.fromPartial(authorizationData)
+  const sendAuth = Any.fromPartial({
+    typeUrl: '/cosmos.bank.v1beta1.SendAuthorization',
+    value: SendAuthorization.encode(authorization).finish(),
+  })
+  // Create authz grant message inline
+  const expirationDate = config.sessionExpiration || new Date(Date.now() + 24 * 60 * 60 * 1000) // Default 24 hours
+  const authzGrant = {
+    granter: primaryAddress,
+    grantee: sessionAddress,
+    grant: {
+      authorization: sendAuth,
+      expiration: dateToTimestamp(expirationDate),
+    },
+  }
 
   // Primary wallet grants session wallet fee allowance
   const gasLimitCoins: Coin[] = config.gasLimit
     ? [Coin.fromPartial({ denom: config.gasLimit.denom, amount: config.gasLimit.amount })]
-    : [Coin.fromPartial({ denom: 'uphoton', amount: '1000000' })] // Default 1 UPHOTON for gas
+    : [Coin.fromPartial({ denom: 'uphoton', amount: '10000000' })] // Default 10 PHOTON for gas
 
-  const feeAllowance = createBasicAllowance(gasLimitCoins, config.sessionExpiration)
-  const feegrant = createFeegrantMsg(primaryAddress, sessionAddress, feeAllowance)
+  // Create basic fee allowance inline
+  const allowance = BasicAllowance.fromPartial({
+    spendLimit: gasLimitCoins,
+    expiration: config.sessionExpiration ? dateToTimestamp(config.sessionExpiration) : undefined,
+  })
+  const feeAllowance = Any.fromPartial({
+    typeUrl: '/cosmos.feegrant.v1beta1.BasicAllowance',
+    value: BasicAllowance.encode(allowance).finish(),
+  })
+  // Create feegrant message inline
+  const feegrant = {
+    granter: primaryAddress,
+    grantee: sessionAddress,
+    allowance: feeAllowance,
+  }
 
   return {
     authzGrant,
     feegrant,
-  }
-}
-
-// Revoke an authz grant
-export function createRevokeMsg(granter: string, grantee: string, msgTypeUrl: string): MsgRevoke {
-  return {
-    granter,
-    grantee,
-    msgTypeUrl,
-  }
-}
-
-// Create a feegrant revoke message
-export function createFeegrantRevokeMsg(granter: string, grantee: string): MsgRevokeAllowance {
-  return {
-    granter,
-    grantee,
   }
 }
 
@@ -230,7 +268,14 @@ export async function revokeStint(
   const sessionAddress = wallet.sessionAddress()
 
   return {
-    revokeAuthz: createRevokeMsg(primaryAddress, sessionAddress, msgTypeUrl),
-    revokeFeegrant: createFeegrantRevokeMsg(primaryAddress, sessionAddress),
+    revokeAuthz: {
+      granter: primaryAddress,
+      grantee: sessionAddress,
+      msgTypeUrl,
+    },
+    revokeFeegrant: {
+      granter: primaryAddress,
+      grantee: sessionAddress,
+    },
   }
 }
