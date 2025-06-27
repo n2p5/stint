@@ -6,7 +6,13 @@ import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
-import { SessionWallet, SessionWalletConfig, AuthzGrantInfo, FeegrantInfo, DelegationConfig } from './types'
+import {
+  SessionWallet,
+  SessionWalletConfig,
+  AuthzGrantInfo,
+  FeegrantInfo,
+  DelegationConfig,
+} from './types'
 import { getOrCreatePasskeyWallet } from './passkey'
 
 // ============================================================================
@@ -75,10 +81,12 @@ export async function newSessionWallet(config: SessionWalletConfig): Promise<Ses
     // Methods - created by factory functions
     hasAuthzGrant: createHasAuthzGrant(config.primaryClient, primaryAddress, sessionAddress),
     hasFeegrant: createHasFeegrant(config.primaryClient, primaryAddress, sessionAddress),
-    
+
     // Methods - message generation (implemented inline)
-    generateDelegationMessages: (config: DelegationConfig) => generateDelegationMessagesFn(primaryAddress, sessionAddress, config),
-    revokeDelegationMessages: (msgTypeUrl?: string) => revokeDelegationMessagesFn(primaryAddress, sessionAddress, msgTypeUrl),
+    generateDelegationMessages: (config: DelegationConfig) =>
+      generateDelegationMessagesFn(primaryAddress, sessionAddress, config),
+    revokeDelegationMessages: (msgTypeUrl?: string) =>
+      revokeDelegationMessagesFn(primaryAddress, sessionAddress, msgTypeUrl),
   }
 
   return wallet
@@ -190,7 +198,6 @@ function generateDelegationMessagesFn(
   sessionAddress: string,
   config: DelegationConfig
 ): EncodeObject[] {
-
   // Primary wallet grants session wallet limited send authorization
   const spendLimitCoins: Coin[] = config.spendLimit
     ? [Coin.fromPartial({ denom: config.spendLimit.denom, amount: config.spendLimit.amount })]
@@ -259,7 +266,6 @@ function revokeDelegationMessagesFn(
   sessionAddress: string,
   msgTypeUrl: string = '/cosmos.bank.v1beta1.MsgSend'
 ): EncodeObject[] {
-
   return [
     {
       typeUrl: '/cosmos.authz.v1beta1.MsgRevoke',

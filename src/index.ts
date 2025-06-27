@@ -2,8 +2,4 @@
 export { newSessionWallet } from './stint'
 
 // Types
-export type { 
-  SessionWallet, 
-  SessionWalletConfig, 
-  DelegationConfig 
-} from './types'
+export type { SessionWallet, SessionWalletConfig, DelegationConfig } from './types'

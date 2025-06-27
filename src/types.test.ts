@@ -13,7 +13,7 @@ describe('type exports', () => {
   it('should export all required types', () => {
     // This test verifies that all types are properly exported
     // The test passes if TypeScript can compile this file
-    
+
     // Example type usage to ensure they're properly defined
     const passkeyCredential: PasskeyCredential = {
       id: 'test-id',

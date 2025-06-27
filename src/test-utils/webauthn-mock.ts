@@ -21,7 +21,7 @@ export function setupWebAuthnMock(options: MockWebAuthnOptions = {}) {
   const mockCreate = vi.fn().mockImplementation(async (_options: unknown) => {
     const credentialId = 'mock-credential-id'
     const rawId = new TextEncoder().encode(credentialId)
-    
+
     return {
       id: credentialId,
       rawId: rawId.buffer,
@@ -32,17 +32,44 @@ export function setupWebAuthnMock(options: MockWebAuthnOptions = {}) {
       type: 'public-key',
       authenticatorAttachment: null,
       getClientExtensionResults: () => ({
-        prf: prfSupported ? { enabled: true } : undefined
-      })
+        prf: prfSupported ? { enabled: true } : undefined,
+      }),
     }
   })
 
   // Mock navigator.credentials.get
-  const mockGet = vi.fn().mockImplementation(async (options: { publicKey?: { allowCredentials?: unknown[] } }) => {
-    if (!options.publicKey?.allowCredentials?.length) {
-      // Discovery mode - return existing credential if available
+  const mockGet = vi
+    .fn()
+    .mockImplementation(async (options: { publicKey?: { allowCredentials?: unknown[] } }) => {
+      if (!options.publicKey?.allowCredentials?.length) {
+        // Discovery mode - return existing credential if available
+        return {
+          id: 'mock-credential-id',
+          rawId: new ArrayBuffer(0),
+          response: {
+            authenticatorData: new ArrayBuffer(0),
+            clientDataJSON: new ArrayBuffer(0),
+            signature: new ArrayBuffer(0),
+            userHandle: new ArrayBuffer(0),
+          },
+          type: 'public-key',
+          authenticatorAttachment: null,
+          getClientExtensionResults: () => ({
+            prf: prfSupported
+              ? {
+                  results: {
+                    first: prfOutput,
+                  },
+                }
+              : undefined,
+          }),
+        } as MockCredential
+      }
+
+      const credentialId = (options.publicKey.allowCredentials[0] as { id: string }).id
+
       return {
-        id: 'mock-credential-id',
+        id: typeof credentialId === 'string' ? credentialId : 'mock-credential-id',
         rawId: new ArrayBuffer(0),
         response: {
           authenticatorData: new ArrayBuffer(0),
@@ -53,37 +80,16 @@ export function setupWebAuthnMock(options: MockWebAuthnOptions = {}) {
         type: 'public-key',
         authenticatorAttachment: null,
         getClientExtensionResults: () => ({
-          prf: prfSupported ? {
-            results: {
-              first: prfOutput
-            }
-          } : undefined
-        })
+          prf: prfSupported
+            ? {
+                results: {
+                  first: prfOutput,
+                },
+              }
+            : undefined,
+        }),
       } as MockCredential
-    }
-
-    const credentialId = (options.publicKey.allowCredentials[0] as { id: string }).id
-    
-    return {
-      id: typeof credentialId === 'string' ? credentialId : 'mock-credential-id',
-      rawId: new ArrayBuffer(0),
-      response: {
-        authenticatorData: new ArrayBuffer(0),
-        clientDataJSON: new ArrayBuffer(0),
-        signature: new ArrayBuffer(0),
-        userHandle: new ArrayBuffer(0),
-      },
-      type: 'public-key',
-      authenticatorAttachment: null,
-      getClientExtensionResults: () => ({
-        prf: prfSupported ? {
-          results: {
-            first: prfOutput
-          }
-        } : undefined
-      })
-    } as MockCredential
-  })
+    })
 
   // Set up the mocks
   ;(global.navigator as any) = {
@@ -91,14 +97,14 @@ export function setupWebAuthnMock(options: MockWebAuthnOptions = {}) {
     credentials: {
       create: mockCreate,
       get: mockGet,
-    }
+    },
   }
 
   // Mock PublicKeyCredential
   ;(global.window as any) = {
     ...global.window,
     PublicKeyCredential: class MockPublicKeyCredential {},
-    location: { hostname: 'localhost' }
+    location: { hostname: 'localhost' },
   }
 
   // Mock crypto.getRandomValues

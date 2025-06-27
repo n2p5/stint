@@ -11,11 +11,11 @@ describe('passkey utilities', () => {
       const testInput = new Uint8Array([1, 2, 3, 4, 5])
       const hashed = sha256(testInput)
       const hexOutput = toHex(hashed)
-      
+
       // SHA256 should always produce 64 character hex string (32 bytes)
       expect(hexOutput).toHaveLength(64)
       expect(hexOutput).toMatch(/^[0-9a-f]{64}$/)
-      
+
       // Should be deterministic
       const hashed2 = sha256(testInput)
       const hexOutput2 = toHex(hashed2)
@@ -25,10 +25,10 @@ describe('passkey utilities', () => {
     it('should produce different outputs for different inputs', () => {
       const input1 = new Uint8Array([1, 2, 3])
       const input2 = new Uint8Array([4, 5, 6])
-      
+
       const output1 = toHex(sha256(input1))
       const output2 = toHex(sha256(input2))
-      
+
       expect(output1).not.toBe(output2)
     })
   })
@@ -38,7 +38,7 @@ describe('passkey utilities', () => {
       const salt = 'stint-wallet'
       const encoded1 = new TextEncoder().encode(salt)
       const encoded2 = new TextEncoder().encode(salt)
-      
+
       expect(encoded1).toEqual(encoded2)
       expect(encoded1).toBeInstanceOf(Uint8Array)
     })
@@ -46,10 +46,10 @@ describe('passkey utilities', () => {
     it('should produce different encodings for different salts', () => {
       const salt1 = 'stint-wallet'
       const salt2 = 'trading-wallet'
-      
+
       const encoded1 = new TextEncoder().encode(salt1)
       const encoded2 = new TextEncoder().encode(salt2)
-      
+
       expect(encoded1).not.toEqual(encoded2)
     })
   })
@@ -61,7 +61,7 @@ describe('passkey utilities', () => {
       // Mock window.location
       Object.defineProperty(window, 'location', {
         value: { hostname: 'localhost' },
-        writable: true
+        writable: true,
       })
     })
 
@@ -71,9 +71,9 @@ describe('passkey utilities', () => {
 
     describe('with PRF support', () => {
       beforeEach(() => {
-        mockWebAuthn = setupWebAuthnMock({ 
+        mockWebAuthn = setupWebAuthnMock({
           prfSupported: true,
-          prfOutput: new Uint8Array(32).fill(123)
+          prfOutput: new Uint8Array(32).fill(123),
         })
       })
 
@@ -84,7 +84,7 @@ describe('passkey utilities', () => {
         const result = await getOrCreatePasskeyWallet({
           walletAddress: 'cosmos1test123',
           displayName: 'Test Wallet',
-          saltName: 'test-salt'
+          saltName: 'test-salt',
         })
 
         expect(result.credentialId).toBe('mock-credential-id')
@@ -96,7 +96,7 @@ describe('passkey utilities', () => {
         const result = await getOrCreatePasskeyWallet({
           walletAddress: 'cosmos1test123',
           displayName: 'Test Wallet',
-          saltName: 'test-salt'
+          saltName: 'test-salt',
         })
 
         expect(result.credentialId).toBe('mock-credential-id')
@@ -115,9 +115,9 @@ describe('passkey utilities', () => {
           expect.objectContaining({
             publicKey: expect.objectContaining({
               user: expect.objectContaining({
-                displayName: 'Stint: cosmos1ver...'
-              })
-            })
+                displayName: 'Stint: cosmos1ver...',
+              }),
+            }),
           })
         )
       })
@@ -125,28 +125,31 @@ describe('passkey utilities', () => {
       it('should produce different keys for different salts', async () => {
         const result1 = await getOrCreatePasskeyWallet({
           walletAddress: 'cosmos1test123',
-          saltName: 'salt1'
+          saltName: 'salt1',
         })
 
         // Change PRF output for second call
-        mockWebAuthn.mockGet.mockImplementationOnce(async () => ({
-          id: 'mock-credential-id',
-          rawId: new ArrayBuffer(0),
-          response: {} as any,
-          type: 'public-key' as const,
-          authenticatorAttachment: null,
-          getClientExtensionResults: () => ({
-            prf: {
-              results: {
-                first: new Uint8Array(32).fill(99) // Different PRF output
-              }
-            }
-          })
-        } as any))
+        mockWebAuthn.mockGet.mockImplementationOnce(
+          async () =>
+            ({
+              id: 'mock-credential-id',
+              rawId: new ArrayBuffer(0),
+              response: {} as any,
+              type: 'public-key' as const,
+              authenticatorAttachment: null,
+              getClientExtensionResults: () => ({
+                prf: {
+                  results: {
+                    first: new Uint8Array(32).fill(99), // Different PRF output
+                  },
+                },
+              }),
+            }) as any
+        )
 
         const result2 = await getOrCreatePasskeyWallet({
           walletAddress: 'cosmos1test123',
-          saltName: 'salt2'
+          saltName: 'salt2',
         })
 
         expect(result1.privateKey).not.toBe(result2.privateKey)
@@ -183,7 +186,7 @@ describe('passkey utilities', () => {
         const originalCredentials = navigator.credentials
         Object.defineProperty(navigator, 'credentials', {
           value: undefined,
-          configurable: true
+          configurable: true,
         })
 
         await expect(
@@ -195,7 +198,7 @@ describe('passkey utilities', () => {
         // Restore
         Object.defineProperty(navigator, 'credentials', {
           value: originalCredentials,
-          configurable: true
+          configurable: true,
         })
       })
 

@@ -2,7 +2,7 @@
 ;(globalThis as any).process = {
   env: {},
   nextTick: (fn: () => void) => Promise.resolve().then(() => fn()),
-  browser: true
+  browser: true,
 }
 
 import { newSessionWallet, createStintSetup } from 'stint'
@@ -320,7 +320,7 @@ transactionBtn.addEventListener('click', async () => {
     // Check if authz grant and feegrant already exist using wallet methods
     const authzGrantInfo = await stintWallet.hasAuthzGrant()
     const feegrantInfo = await stintWallet.hasFeegrant()
-    
+
     const hasAuthzGrant = !!authzGrantInfo
     const hasFeegrant = !!feegrantInfo
 

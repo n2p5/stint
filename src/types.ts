@@ -52,15 +52,15 @@ export interface SessionWallet {
   primaryWallet: OfflineSigner
   sessionWallet: DirectSecp256k1Wallet
   client: SigningStargateClient
-  
+
   // Methods - synchronous with cached addresses
   primaryAddress(): string
   sessionAddress(): string
-  
+
   // Methods - asynchronous grant checking
   hasAuthzGrant(messageType?: string): Promise<AuthzGrantInfo | null>
   hasFeegrant(): Promise<FeegrantInfo | null>
-  
+
   // Methods - message generation
   generateDelegationMessages(config: DelegationConfig): EncodeObject[]
   revokeDelegationMessages(msgTypeUrl?: string): EncodeObject[]
