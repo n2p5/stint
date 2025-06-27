@@ -1,7 +1,7 @@
 {
-  "name": "stint",
+  "name": "stint-signer",
   "version": "0.1.0",
-  "description": "Short-lived, non-custodial session wallets for Cosmos SDK",
+  "description": "Short-lived, non-custodial session signer using passkeys for Cosmos SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -18,17 +18,20 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "dev:example": "pnpm --filter stint-example-basic dev",
+    "dev:example": "pnpm --filter stint-example-dither-post-demo dev",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src examples --ext ts,tsx",
-    "format": "prettier --write \"src/**/*.ts\" \"examples/**/*.ts\"",
-    "test": "vitest"
+    "format": "prettier --write \"src/**/*.ts\" \"examples/**/src/**/*.ts\"",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "cosmos",
     "cosmjs",
     "wallet",
     "session",
+    "signer",
     "authz",
     "passkey",
     "webauthn"
@@ -39,15 +42,17 @@
     "type": "git",
     "url": "https://github.com/n2p5/stint.git"
   },
-  "packageManager": "pnpm@10.11.1",
+  "packageManager": "pnpm@10.12.4",
   "devDependencies": {
     "@eslint/js": "^9.29.0",
-    "@types/node": "^24.0.4",
+    "@types/node": "^24.0.6",
     "@typescript-eslint/eslint-plugin": "^8.35.0",
     "@typescript-eslint/parser": "^8.35.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
     "eslint": "^9.29.0",
-    "prettier": "^3.6.1",
+    "happy-dom": "^18.0.1",
+    "prettier": "^3.6.2",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
