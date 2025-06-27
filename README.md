@@ -25,7 +25,13 @@ The system works by creating a **session wallet** that never holds funds but can
 
 ## Installation
 
-TBD
+```bash
+npm install stint
+# or
+pnpm add stint
+# or
+yarn add stint
+```
 
 ## Quick Start
 
@@ -164,6 +170,7 @@ stintExample().catch(console.error)
 See the [examples](./examples) directory for complete working examples:
 
 - [Basic Example](./examples/basic) - Complete browser demo with multi-wallet support
+- [Dither Post Demo](./examples/dither-post-demo) - Modern UI with DaisyUI components
 
 ## Development
 

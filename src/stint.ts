@@ -1,4 +1,4 @@
-import { SigningStargateClient } from '@cosmjs/stargate'
+import { SigningStargateClient, GasPrice } from '@cosmjs/stargate'
 import { DirectSecp256k1Wallet, OfflineSigner, EncodeObject } from '@cosmjs/proto-signing'
 import { fromHex } from '@cosmjs/encoding'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
@@ -60,8 +60,22 @@ export async function newSessionWallet(config: SessionWalletConfig): Promise<Ses
   }
 
   // Create a new client for the session wallet using the same RPC endpoint as primary
+  // Ensure we use a proper GasPrice object
+  const originalGasPrice = (config.primaryClient as any).gasPrice;
+  let gasPrice;
+  
+  if (originalGasPrice && typeof originalGasPrice === 'object' && originalGasPrice.denom && originalGasPrice.amount) {
+    // Convert object format to proper GasPrice
+    gasPrice = GasPrice.fromString(`${originalGasPrice.amount}${originalGasPrice.denom}`);
+  } else if (typeof originalGasPrice === 'string') {
+    gasPrice = GasPrice.fromString(originalGasPrice);
+  } else {
+    // Default fallback
+    gasPrice = GasPrice.fromString('0.025uphoton');
+  }
+  
   const client = await SigningStargateClient.connectWithSigner(rpcUrl, sessionWallet, {
-    gasPrice: (config.primaryClient as any).gasPrice,
+    gasPrice,
   })
 
   const wallet: SessionWallet = {
