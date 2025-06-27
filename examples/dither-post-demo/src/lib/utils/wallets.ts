@@ -58,7 +58,7 @@ export async function connectKeplr() {
   
   try {
     await window.keplr.experimentalSuggestChain(CHAIN_INFO);
-  } catch (err) {
+  } catch {
     // Chain might already be added
   }
   
