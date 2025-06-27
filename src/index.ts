@@ -1,18 +1,9 @@
-// Passkey functions
-export { getOrCreatePasskeyWallet } from './passkey'
-
-// Stint functions (wallet creation, authz + feegrant)
-export {
-  newSessionWallet,
-  createStintSetup,
-  revokeStint,
-} from './stint'
+// Main function
+export { newSessionWallet } from './stint'
 
 // Types
 export type { 
   SessionWallet, 
   SessionWalletConfig, 
-  StintConfig 
+  DelegationConfig 
 } from './types'
-
-export type { PasskeyWallet, PasskeyOptions } from './passkey'

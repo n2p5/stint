@@ -1,14 +1,12 @@
 import { SigningStargateClient } from '@cosmjs/stargate'
-import { DirectSecp256k1Wallet, OfflineSigner } from '@cosmjs/proto-signing'
+import { DirectSecp256k1Wallet, OfflineSigner, EncodeObject } from '@cosmjs/proto-signing'
 import { fromHex } from '@cosmjs/encoding'
-import { MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
-import { MsgGrantAllowance, MsgRevokeAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
 import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
-import { SessionWallet, SessionWalletConfig, AuthzGrantInfo, FeegrantInfo } from './types'
+import { SessionWallet, SessionWalletConfig, AuthzGrantInfo, FeegrantInfo, DelegationConfig } from './types'
 import { getOrCreatePasskeyWallet } from './passkey'
 
 // ============================================================================
@@ -77,6 +75,10 @@ export async function newSessionWallet(config: SessionWalletConfig): Promise<Ses
     // Methods - created by factory functions
     hasAuthzGrant: createHasAuthzGrant(config.primaryClient, primaryAddress, sessionAddress),
     hasFeegrant: createHasFeegrant(config.primaryClient, primaryAddress, sessionAddress),
+    
+    // Methods - message generation (implemented inline)
+    generateDelegationMessages: (config: DelegationConfig) => generateDelegationMessagesFn(primaryAddress, sessionAddress, config),
+    revokeDelegationMessages: (msgTypeUrl?: string) => revokeDelegationMessagesFn(primaryAddress, sessionAddress, msgTypeUrl),
   }
 
   return wallet
@@ -126,8 +128,7 @@ function createHasAuthzGrant(
         authorization: grant.authorization,
         expiration: grant.expiration ? new Date(grant.expiration) : undefined,
       }
-    } catch (error) {
-      console.warn('Error checking authz grant:', error)
+    } catch {
       return null
     }
   }
@@ -166,8 +167,7 @@ function createHasFeegrant(
         allowance: data.allowance,
         expiration: data.allowance.expiration ? new Date(data.allowance.expiration) : undefined,
       }
-    } catch (error) {
-      console.warn('Error checking feegrant:', error)
+    } catch {
       return null
     }
   }
@@ -178,27 +178,18 @@ function createHasFeegrant(
 // ============================================================================
 
 // Convert Date to protobuf Timestamp
-function dateToTimestamp(date: Date): Timestamp {
+export function dateToTimestamp(date: Date): Timestamp {
   const seconds = Math.floor(date.getTime() / 1000)
   const nanos = (date.getTime() % 1000) * 1000000
   return Timestamp.fromPartial({ seconds: BigInt(seconds), nanos })
 }
 
-// Create combined stint setup (authz + feegrant)
-export async function createStintSetup(
-  wallet: SessionWallet,
-  config: {
-    sessionExpiration?: Date
-    spendLimit?: { denom: string; amount: string }
-    gasLimit?: { denom: string; amount: string }
-    allowedRecipients?: string[]
-  }
-): Promise<{
-  authzGrant: MsgGrant
-  feegrant: MsgGrantAllowance
-}> {
-  const primaryAddress = wallet.primaryAddress()
-  const sessionAddress = wallet.sessionAddress()
+// Generate authz grant and feegrant messages for session wallet delegation
+function generateDelegationMessagesFn(
+  primaryAddress: string,
+  sessionAddress: string,
+  config: DelegationConfig
+): EncodeObject[] {
 
   // Primary wallet grants session wallet limited send authorization
   const spendLimitCoins: Coin[] = config.spendLimit
@@ -250,32 +241,40 @@ export async function createStintSetup(
     allowance: feeAllowance,
   }
 
-  return {
-    authzGrant,
-    feegrant,
-  }
+  return [
+    {
+      typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
+      value: authzGrant,
+    },
+    {
+      typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance',
+      value: feegrant,
+    },
+  ]
 }
 
-// Helper to revoke all stint grants (authz + feegrant)
-export async function revokeStint(
-  wallet: SessionWallet,
+// Generate revocation messages for authz and feegrant
+function revokeDelegationMessagesFn(
+  primaryAddress: string,
+  sessionAddress: string,
   msgTypeUrl: string = '/cosmos.bank.v1beta1.MsgSend'
-): Promise<{
-  revokeAuthz: MsgRevoke
-  revokeFeegrant: MsgRevokeAllowance
-}> {
-  const primaryAddress = wallet.primaryAddress()
-  const sessionAddress = wallet.sessionAddress()
+): EncodeObject[] {
 
-  return {
-    revokeAuthz: {
-      granter: primaryAddress,
-      grantee: sessionAddress,
-      msgTypeUrl,
+  return [
+    {
+      typeUrl: '/cosmos.authz.v1beta1.MsgRevoke',
+      value: {
+        granter: primaryAddress,
+        grantee: sessionAddress,
+        msgTypeUrl,
+      },
     },
-    revokeFeegrant: {
-      granter: primaryAddress,
-      grantee: sessionAddress,
+    {
+      typeUrl: '/cosmos.feegrant.v1beta1.MsgRevokeAllowance',
+      value: {
+        granter: primaryAddress,
+        grantee: sessionAddress,
+      },
     },
-  }
+  ]
 }

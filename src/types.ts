@@ -1,4 +1,4 @@
-import { OfflineSigner, DirectSecp256k1Wallet } from '@cosmjs/proto-signing'
+import { OfflineSigner, DirectSecp256k1Wallet, EncodeObject } from '@cosmjs/proto-signing'
 import { SigningStargateClient } from '@cosmjs/stargate'
 
 export interface PasskeyCredential {
@@ -25,6 +25,19 @@ export interface SessionWalletConfig {
   saltName?: string
 }
 
+export interface DelegationConfig {
+  sessionExpiration?: Date
+  spendLimit?: {
+    denom: string
+    amount: string
+  }
+  gasLimit?: {
+    denom: string
+    amount: string
+  }
+  allowedRecipients?: string[]
+}
+
 export interface AuthzGrantInfo {
   authorization: any
   expiration?: Date
@@ -47,4 +60,8 @@ export interface SessionWallet {
   // Methods - asynchronous grant checking
   hasAuthzGrant(messageType?: string): Promise<AuthzGrantInfo | null>
   hasFeegrant(): Promise<FeegrantInfo | null>
+  
+  // Methods - message generation
+  generateDelegationMessages(config: DelegationConfig): EncodeObject[]
+  revokeDelegationMessages(msgTypeUrl?: string): EncodeObject[]
 }

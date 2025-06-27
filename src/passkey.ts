@@ -214,8 +214,7 @@ async function createPasskey(options: InternalPasskeyOptions): Promise<PublicKey
   // More lenient PRF check - sometimes the 'enabled' flag isn't set but PRF still works
   const prfExtension = clientExtensionResults.prf
   if (!prfExtension) {
-    // For now, let's continue and see if we can use it anyway
-    // throw new Error('PRF extension not supported by authenticator')
+    throw new Error('Passkey created but PRF extension not enabled')
   }
 
   return credential

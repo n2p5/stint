@@ -79,16 +79,25 @@ A complete browser demonstration of Stint's session wallet functionality using A
 
 ### Simplified API
 
-Session wallet creation now handles passkey management automatically:
+Session wallet creation is now even simpler:
 
 ```typescript
-// Just one function call creates everything
-const stintWallet = await newSessionWallet({
-  primaryWallet: signer,
-  primaryAddress: primaryAddress,
-  prefix: 'atone',
-  sessionConfig: { chainId, rpcEndpoint, gasPrice }
+// Just pass your existing client
+const wallet = await newSessionWallet({
+  primaryClient: signingClient,
+  saltName: 'my-app' // optional
 })
+
+// Generate delegation messages
+const { authzGrant, feegrant } = wallet.generateDelegationMessages({
+  sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  spendLimit: { denom: 'uatom', amount: '1000000' },     // Can be uatom (ATOM) or uphoton (PHOTON)
+  gasLimit: { denom: 'uphoton', amount: '10000000' }     // Must be uphoton (PHOTON) in AtomOne
+})
+
+// Check for existing grants
+const hasAuthz = await wallet.hasAuthzGrant()
+const hasFeegrant = await wallet.hasFeegrant()
 ```
 
 ### Multiple Session Wallets
@@ -96,8 +105,9 @@ const stintWallet = await newSessionWallet({
 Create different session wallets for different purposes:
 
 ```typescript
-const defaultWallet = await newSessionWallet({ ...config }) // default
-const tradingWallet = await newSessionWallet({ ...config, saltName: 'trading' }) // trading scope
+const defaultWallet = await newSessionWallet({ primaryClient })
+const tradingWallet = await newSessionWallet({ primaryClient, saltName: 'trading' })
+const gamingWallet = await newSessionWallet({ primaryClient, saltName: 'gaming' })
 ```
 
 ### Smart Duplicate Prevention

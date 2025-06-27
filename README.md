@@ -25,61 +25,139 @@ The system works by creating a **session wallet** that never holds funds but can
 
 ## Installation
 
-```bash
-npm install stint
-# or
-pnpm add stint
-# or
-yarn add stint
-```
+TBD
 
 ## Quick Start
 
 ```typescript
-import {
-  newSessionWallet,
-  createStintSetup
-} from 'stint'
+import { newSessionWallet } from 'stint'
+import { SigningStargateClient } from '@cosmjs/stargate'
 
-// 1. Create complete session (handles everything automatically)
-const wallet = await newSessionWallet({
-  primaryWallet: yourCosmosWalletSigner, // Keplr, Leap, etc.
-  prefix: 'cosmos',                      // optional, defaults to 'atom1'
-  saltName: 'stint-wallet',              // optional, defaults to 'stint-wallet'
-  sessionConfig: {
-    chainId: 'cosmoshub-4',
-    rpcEndpoint: 'https://rpc.cosmos.network',
-    gasPrice: '0.025uatom'
-  }
+// 1. Create session wallet
+const sessionWallet = await newSessionWallet({
+  primaryClient,  // Your existing SigningStargateClient
+  saltName: 'my-app' // optional, defaults to 'stint-wallet'
 })
 
-// 2. Create authz grant and feegrant setup
-const stintSetup = await createStintSetup(wallet, {
+// 2. Check existing grants (optional)
+const hasAuthz = await sessionWallet.hasAuthzGrant()
+const hasFeegrant = await sessionWallet.hasFeegrant()
+
+// 3. Generate ready-to-broadcast delegation messages
+const authorizedRecipient = 'cosmos1recipient123...'
+const setupMessages = sessionWallet.generateDelegationMessages({
   sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-  spendLimit: { denom: 'uatom', amount: '1000000' }, // 1 ATOM spending limit
-  gasLimit: { denom: 'uatom', amount: '500000' }      // 0.5 ATOM gas limit
+  spendLimit: { denom: 'uatom', amount: '1000000' },   // 1 ATOM spending limit (can be uatom or uphoton)
+  gasLimit: { denom: 'uphoton', amount: '500000' },    // 0.5 PHOTON gas limit (must be uphoton in AtomOne)
+  allowedRecipients: [authorizedRecipient] // Restrict to specific recipient only
 })
 
-// 3. Broadcast setup transaction with your primary wallet
-const setupMessages = [
-  {
-    typeUrl: '/cosmos.authz.v1beta1.MsgGrant',
-    value: stintSetup.authzGrant,
-  },
-  {
-    typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance', 
-    value: stintSetup.feegrant,
-  }
-]
+// 4. Broadcast setup transaction with your primary wallet
 
-await primaryClient.signAndBroadcast(await wallet.primaryAddress(), setupMessages, fee)
+const primaryAddress = sessionWallet.primaryAddress()
+await primaryClient.signAndBroadcast(primaryAddress, setupMessages, 'auto')
 
-// 4. Session wallet is now ready to transact!
-const sessionAddress = await wallet.sessionAddress()
-const primaryAddress = await wallet.primaryAddress()
-// sessionAddress can now send transactions within authorized limits
-// All gas fees are paid by the feegrant from your primary wallet
+// 5. Use session wallet to send transactions!
+await sessionWallet.client.sendTokens(
+  sessionWallet.primaryAddress(), // Funds come from primary wallet
+  authorizedRecipient, // Must match allowedRecipients from step 3
+  [{ denom: 'uatom', amount: '100000' }], // 0.1 ATOM
+  'auto',
+  'Sent via session wallet'
+)
+// ✅ Session wallet never held funds
+// ✅ Gas fees automatically paid via feegrant  
+// ✅ Transaction authorized within limits
 ```
+
+## Complete Flow Example
+
+Here's a complete example showing how to set up a session wallet and send a transaction on behalf of the primary wallet:
+
+```typescript
+import { newSessionWallet } from 'stint'
+import { SigningStargateClient } from '@cosmjs/stargate'
+
+async function stintExample() {
+  // 1. Create session wallet (triggers passkey creation/authentication)
+  const sessionWallet = await newSessionWallet({
+    primaryClient,  // Your existing SigningStargateClient
+    saltName: 'my-app-trading'  // Optional: creates isolated session wallet
+  })
+
+  const primaryAddress = sessionWallet.primaryAddress()
+  const sessionAddress = sessionWallet.sessionAddress()
+  
+  console.log(`Primary wallet: ${primaryAddress}`)
+  console.log(`Session wallet: ${sessionAddress}`)
+
+  // 2. Check if authorizations already exist (optional)
+  const existingAuthz = await sessionWallet.hasAuthzGrant()
+  const existingFeegrant = await sessionWallet.hasFeegrant()
+  
+  // 3. Define authorized recipient for restrictions
+  const authorizedRecipient = 'cosmos1isolatedaccountxyz123...'
+  
+  if (!existingAuthz || !existingFeegrant) {
+    // Generate ready-to-broadcast authorization messages with account scope restriction
+    const setupMessages = sessionWallet.generateDelegationMessages({
+      sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      spendLimit: { denom: 'uphoton', amount: '500000' }, // Max 0.5 PHOTON for sending
+      gasLimit: { denom: 'uphoton', amount: '500000' },  // 0.5 PHOTON for gas
+      allowedRecipients: [authorizedRecipient] // Restrict to specific recipient
+    // 4. Authorize with primary wallet (ready-to-broadcast messages)
+    })
+
+    // 4. Authorize with primary wallet (ready-to-broadcast messages)
+    console.log('Setting up session wallet authorizations...')
+    const setupResult = await primaryClient.signAndBroadcast(
+      primaryAddress, 
+      setupMessages, 
+      'auto'
+    )
+    
+    console.log('Setup successful:', setupResult.transactionHash)
+  } else {
+    console.log('Session wallet already authorized!')
+  }
+
+  // 5. Use session wallet client to send funds on behalf of primary wallet
+  const sendAmount = [{ denom: 'uatom', amount: '500000' }] // 0.5 ATOM (within limits)
+
+  console.log('Sending transaction via session wallet...')
+  
+  // Session wallet client sends funds with memo (gas fees automatically covered by feegrant)
+  const sendResult = await sessionWallet.client.sendTokens(
+    sessionWallet.primaryAddress(), // Funds come from primary wallet
+    authorizedRecipient, // Must match allowedRecipients from authorization
+    sendAmount,
+    'auto',
+    'Sent via Stint session wallet 🚀' // Optional memo
+  )
+
+  console.log('Transaction successful:', sendResult.transactionHash)
+  console.log('Funds transferred from primary to isolated account!')
+
+  // The session wallet:
+  // ✅ Never held any funds
+  // ✅ Sent transaction on behalf of primary wallet  
+  // ✅ Gas fees automatically paid from primary wallet via feegrant
+  // ✅ Restricted to authorized recipient only
+  // ✅ Limited to authorized spending amount
+}
+
+// Run the example
+stintExample().catch(console.error)
+```
+
+### Key Benefits Demonstrated
+
+- **Zero-balance operation**: Session wallet never needs funds
+- **Automatic gas payment**: Feegrant covers all transaction fees
+- **Scope restrictions**: Limited to specific recipients and amounts
+- **Seamless UX**: No hardware wallet popups after initial setup
+- **Security**: Passkey-based deterministic key derivation
+- **Revocable**: Primary wallet maintains full control
 
 ## Examples
 
@@ -110,17 +188,85 @@ pnpm lint
 
 # Format code
 pnpm format
+
+# Run tests
+pnpm test
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run tests with UI
+pnpm test:ui
 ```
 
 ## How It Works
 
-1. **Passkey Creation**: Uses WebAuthn to create a passkey with PRF extension for your primary wallet address
+1. **Passkey Creation**: Uses WebAuthn to create a passkey with PRF extension linked to your primary wallet address
 2. **Key Derivation**: Derives a deterministic private key from the passkey PRF output using a configurable salt
 3. **Session Wallet**: Creates an ephemeral wallet from the derived key that never holds funds
 4. **Authorization Setup**: Creates both authz grant and feegrant in a single transaction:
    - **Authz Grant**: Primary wallet authorizes session wallet for specific actions (e.g., Send) with spending limits
    - **Feegrant**: Primary wallet grants fee allowance so session wallet can pay for gas
 5. **Seamless Usage**: Session wallet can now sign and send transactions within authorized limits without any balance
+
+## API Reference
+
+### `newSessionWallet(config)`
+
+Creates a new session wallet with passkey-based key derivation.
+
+```typescript
+const wallet = await newSessionWallet({
+  primaryClient: SigningStargateClient,  // Required: Your primary wallet's client
+  saltName?: string                      // Optional: Salt for key derivation (default: 'stint-wallet')
+})
+```
+
+Returns a `SessionWallet` object with these methods:
+
+- `client`: SigningStargateClient for the session wallet (main interface for transactions)
+- `primaryAddress()`: Get the primary wallet address
+- `sessionAddress()`: Get the session wallet address  
+- `generateDelegationMessages(config)`: Generate setup messages for authorization
+- `hasAuthzGrant(messageType?)`: Check if authz grant exists
+- `hasFeegrant()`: Check if feegrant exists
+- `revokeDelegationMessages(msgTypeUrl?)`: Generate revocation messages (optional)
+
+### Wallet Methods
+
+#### `sessionWallet.generateDelegationMessages(config)`
+
+Generates ready-to-broadcast authz grant and feegrant messages to delegate authority to the session wallet.
+
+```typescript
+const messages = sessionWallet.generateDelegationMessages({
+  sessionExpiration?: Date,              // When the grants expire
+  spendLimit?: { denom: string, amount: string },  // Max amount session wallet can spend (uatom or uphoton)
+  gasLimit?: { denom: string, amount: string },    // Max gas fees covered by feegrant (must be uphoton in AtomOne)
+  allowedRecipients?: string[]           // Optional: restrict recipients
+})
+
+// messages is an array ready for signAndBroadcast:
+await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
+```
+
+**AtomOne Denomination Requirements:**
+- `spendLimit.denom`: Can be `'uatom'` (ATOM) or `'uphoton'` (PHOTON)
+- `gasLimit.denom`: Must be `'uphoton'` (PHOTON) - AtomOne requires fees in PHOTON
+- Default values use `'uphoton'` for both spend and gas limits
+
+#### `sessionWallet.revokeDelegationMessages(msgTypeUrl?)`
+
+Generates ready-to-broadcast messages to revoke the delegated authority.
+
+```typescript
+const messages = sessionWallet.revokeDelegationMessages(
+  '/cosmos.bank.v1beta1.MsgSend'  // Optional: message type to revoke (default: MsgSend)
+)
+
+// messages is an array ready for signAndBroadcast:
+await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
+```
 
 ## Multiple Session Wallets
 
@@ -129,22 +275,19 @@ You can create multiple session wallets for different purposes using salt names:
 ```typescript
 // Default session wallet
 const defaultWallet = await newSessionWallet({
-  primaryWallet: signer,
-  sessionConfig: config
+  primaryClient,
 })
 
 // Trading-specific session wallet  
 const tradingWallet = await newSessionWallet({
-  primaryWallet: signer,
+  primaryClient,
   saltName: 'trading',
-  sessionConfig: config
 })
 
 // Gaming-specific session wallet
 const gamingWallet = await newSessionWallet({
-  primaryWallet: signer,
+  primaryClient,
   saltName: 'gaming',
-  sessionConfig: config
 })
 ```
 
