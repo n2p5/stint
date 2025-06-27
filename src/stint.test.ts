@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { dateToTimestamp, newSessionWallet } from './stint'
+import { dateToTimestamp, newSessionSigner } from './stint'
 import { DirectSecp256k1Wallet } from '@cosmjs/proto-signing'
 import { SigningStargateClient } from '@cosmjs/stargate'
-import type { SessionWallet, DelegationConfig } from './types'
+import type { SessionSigner, DelegationConfig } from './types'
 
 // Mock the passkey module
 vi.mock('./passkey', () => ({
-  getOrCreatePasskeyWallet: vi.fn().mockResolvedValue({
+  getOrCreateDerivedKey: vi.fn().mockResolvedValue({
     privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
   }),
 }))
@@ -55,9 +55,9 @@ describe('dateToTimestamp', () => {
   })
 })
 
-describe('SessionWallet methods', () => {
+describe('SessionSigner methods', () => {
   let mockPrimaryClient: SigningStargateClient
-  let wallet: SessionWallet
+  let signer: SessionSigner
 
   beforeEach(async () => {
     // Create mock primary client
@@ -95,7 +95,7 @@ describe('SessionWallet methods', () => {
       },
     } as unknown as SigningStargateClient)
 
-    wallet = await newSessionWallet({
+    signer = await newSessionSigner({
       primaryClient: mockPrimaryClient,
       saltName: 'test-salt',
     })
@@ -104,7 +104,7 @@ describe('SessionWallet methods', () => {
   describe('generateDelegationMessages', () => {
     it('should generate authz grant and feegrant messages with default values', () => {
       const config: DelegationConfig = {}
-      const messages = wallet.generateDelegationMessages(config)
+      const messages = signer.generateDelegationMessages(config)
 
       expect(messages).toHaveLength(2)
 
@@ -128,7 +128,7 @@ describe('SessionWallet methods', () => {
       const config: DelegationConfig = {
         spendLimit: { denom: 'uatom', amount: '5000000' },
       }
-      const messages = wallet.generateDelegationMessages(config)
+      const messages = signer.generateDelegationMessages(config)
       const authzMessage = messages[0]
 
       // The authorization details are encoded, but we can verify the structure
@@ -141,7 +141,7 @@ describe('SessionWallet methods', () => {
       const config: DelegationConfig = {
         spendLimit: { denom: 'uphoton', amount: '1000000' },
       }
-      const messages = wallet.generateDelegationMessages(config)
+      const messages = signer.generateDelegationMessages(config)
       const authzMessage = messages[0]
 
       // The authorization details are encoded, but we can verify the structure
@@ -154,7 +154,7 @@ describe('SessionWallet methods', () => {
       const config: DelegationConfig = {
         gasLimit: { denom: 'uphoton', amount: '2000000' },
       }
-      const messages = wallet.generateDelegationMessages(config)
+      const messages = signer.generateDelegationMessages(config)
       const feegrantMessage = messages[1]
 
       expect(feegrantMessage.value.allowance?.typeUrl).toBe(
@@ -167,7 +167,7 @@ describe('SessionWallet methods', () => {
       const config: DelegationConfig = {
         sessionExpiration: futureDate,
       }
-      const messages = wallet.generateDelegationMessages(config)
+      const messages = signer.generateDelegationMessages(config)
       const authzMessage = messages[0]
 
       // Verify expiration is set (encoded in the grant)
@@ -178,7 +178,7 @@ describe('SessionWallet methods', () => {
       const config: DelegationConfig = {
         allowedRecipients: ['cosmos1recipient1', 'cosmos1recipient2'],
       }
-      const messages = wallet.generateDelegationMessages(config)
+      const messages = signer.generateDelegationMessages(config)
       const authzMessage = messages[0]
 
       expect(authzMessage.value.grant?.authorization).toBeDefined()
@@ -226,7 +226,7 @@ describe('SessionWallet methods', () => {
 
       atomOneTestCases.forEach(({ name, config, description }) => {
         it(name, () => {
-          const messages = wallet.generateDelegationMessages(config)
+          const messages = signer.generateDelegationMessages(config)
           const authzMessage = messages[0]
           const feegrantMessage = messages[1]
 
@@ -251,7 +251,7 @@ describe('SessionWallet methods', () => {
 
       it('should default to uphoton for both spend and gas limits', () => {
         const config: DelegationConfig = {}
-        const messages = wallet.generateDelegationMessages(config)
+        const messages = signer.generateDelegationMessages(config)
         const authzMessage = messages[0]
         const feegrantMessage = messages[1]
 
@@ -269,7 +269,7 @@ describe('SessionWallet methods', () => {
           spendLimit: { denom: 'uatom', amount: '1000000' },
           gasLimit: { denom: 'uphoton', amount: '500000' },
         }
-        const messages = wallet.generateDelegationMessages(config)
+        const messages = signer.generateDelegationMessages(config)
         const authzMessage = messages[0]
         const feegrantMessage = messages[1]
 
@@ -290,7 +290,7 @@ describe('SessionWallet methods', () => {
 
   describe('revokeDelegationMessages', () => {
     it('should generate revoke messages with default message type', () => {
-      const messages = wallet.revokeDelegationMessages()
+      const messages = signer.revokeDelegationMessages()
       const revokeAuthzMessage = messages[0]
       const revokeFeegrantMessage = messages[1]
 
@@ -304,7 +304,7 @@ describe('SessionWallet methods', () => {
 
     it('should use custom message type when provided', () => {
       const customMsgType = '/cosmos.staking.v1beta1.MsgDelegate'
-      const messages = wallet.revokeDelegationMessages(customMsgType)
+      const messages = signer.revokeDelegationMessages(customMsgType)
       const revokeAuthzMessage = messages[0]
 
       expect(revokeAuthzMessage.value.msgTypeUrl).toBe(customMsgType)
@@ -391,7 +391,7 @@ describe('SessionWallet methods', () => {
           global.fetch = vi.fn().mockResolvedValue(mockResponse)
         }
 
-        const result = await wallet.hasAuthzGrant()
+        const result = await signer.hasAuthzGrant()
         expect(result).toEqual(expectedResult)
       })
     })
@@ -402,7 +402,7 @@ describe('SessionWallet methods', () => {
         json: async () => ({ grants: [] }),
       })
 
-      await wallet.hasAuthzGrant('/cosmos.staking.v1beta1.MsgDelegate')
+      await signer.hasAuthzGrant('/cosmos.staking.v1beta1.MsgDelegate')
 
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('msg_type_url=/cosmos.staking.v1beta1.MsgDelegate')
@@ -505,7 +505,7 @@ describe('SessionWallet methods', () => {
           global.fetch = vi.fn().mockResolvedValue(mockResponse)
         }
 
-        const result = await wallet.hasFeegrant()
+        const result = await signer.hasFeegrant()
         expect(result).toEqual(expectedResult)
       })
     })

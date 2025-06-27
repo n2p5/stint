@@ -69,7 +69,7 @@ importers:
       cosmjs-types:
         specifier: ^0.9.0
         version: 0.9.0
-      stint:
+      stint-signer:
         specifier: workspace:*
         version: link:../..
     devDependencies:

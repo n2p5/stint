@@ -1,5 +1,5 @@
 // Main function
-export { newSessionWallet } from './stint'
+export { newSessionSigner } from './stint'
 
 // Types
-export type { SessionWallet, SessionWalletConfig, DelegationConfig } from './types'
+export type { SessionSigner, SessionSignerConfig, DelegationConfig } from './types'

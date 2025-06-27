@@ -1,11 +1,15 @@
 # Stint Dither Post Demo
 
-A clean, modern demo of Stint session wallets built with SvelteKit and DaisyUI.
+A clean, modern demo of Stint session signers built with SvelteKit and DaisyUI.
+
+> **⚠️ EXPERIMENTAL SOFTWARE - TESTNET ONLY**
+> 
+> This is a demonstration of experimental software that has NOT been security audited. Only use on testnets with test tokens that have no real value. Do not use with real funds or in production environments.
 
 ## Features
 
 - 🎨 **Modern UI** with DaisyUI components
-- 🧩 **Modular Components** for wallet connection, session creation, authorization, and transactions
+- 🧩 **Modular Components** for wallet connection, session signer creation, authorization, and transactions
 - 📱 **Responsive Design** that works on desktop and mobile
 - 🔧 **Type Safety** with full TypeScript support
 - ⚡ **Fast Development** with SvelteKit hot reload
@@ -27,10 +31,10 @@ A clean, modern demo of Stint session wallets built with SvelteKit and DaisyUI.
 
 ## How to Use
 
-1. **Connect Wallet** - Connect Keplr, Leap, or Cosmostation
-2. **Create Session** - Generate a session wallet using WebAuthn Passkey
-3. **Create Authorization** - Set up authz grants and feegrants
-4. **Send Transaction** - Use the session wallet to send transactions
+1. **Connect Wallet** - Connect Keplr, Leap, or Cosmostation (primary signer)
+2. **Create Session Signer** - Generate a session signer using WebAuthn Passkey
+3. **Create Authorization** - Set up authz grants and feegrants from primary to session signer
+4. **Send Transaction** - Use the session signer to send transactions on behalf of primary address
 
 ## Project Structure
 
@@ -39,11 +43,11 @@ src/
 ├── lib/
 │   ├── components/        # Svelte components
 │   │   ├── WalletConnect.svelte
-│   │   ├── SessionWallet.svelte
+│   │   ├── SessionSigner.svelte
 │   │   ├── Authorization.svelte
 │   │   └── Transaction.svelte
 │   ├── stores/           # Svelte stores
-│   │   └── wallet.ts
+│   │   └── session.ts
 │   └── utils/            # Utilities
 │       ├── wallets.ts
 │       └── polyfill.ts
@@ -58,7 +62,7 @@ src/
 - **SvelteKit** - Full-stack web framework
 - **DaisyUI** - Tailwind CSS component library
 - **TypeScript** - Type safety
-- **Stint** - Session wallet library
+- **Stint Signer** - Session signer library
 - **CosmJS** - Cosmos SDK JavaScript library
 
 ## Build for Production

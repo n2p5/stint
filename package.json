@@ -1,7 +1,7 @@
 {
-  "name": "stint",
+  "name": "stint-signer",
   "version": "0.1.0",
-  "description": "Short-lived, non-custodial session wallets for Cosmos SDK",
+  "description": "Short-lived, non-custodial session signer using passkeys for Cosmos SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -31,6 +31,7 @@
     "cosmjs",
     "wallet",
     "session",
+    "signer",
     "authz",
     "passkey",
     "webauthn"

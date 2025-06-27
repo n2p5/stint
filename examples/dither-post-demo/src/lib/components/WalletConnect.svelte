@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { walletStore } from '$lib/stores/wallet';
+  import { sessionStore } from '$lib/stores/session';
   import { detectWallets, connectKeplr, connectLeap, connectCosmostation } from '$lib/utils/wallets';
   import { onMount } from 'svelte';
   
@@ -32,10 +32,10 @@
           throw new Error('Unknown wallet type');
       }
       
-      walletStore.update(state => ({
+      sessionStore.update(state => ({
         ...state,
         isConnected: true,
-        walletName: walletInfo.name,
+        name: walletInfo.name,
         signer: walletInfo.signer,
         address: walletInfo.address
       }));
@@ -47,13 +47,13 @@
   }
   
   function disconnect() {
-    walletStore.update(state => ({
+    sessionStore.update(state => ({
       ...state,
       isConnected: false,
-      walletName: null,
+      name: null,
       signer: null,
       address: null,
-      sessionWallet: null
+      sessionSigner: null
     }));
   }
 </script>
@@ -62,14 +62,14 @@
   <div class="card-body">
     <h2 class="card-title">Step 1: Connect Wallet</h2>
     
-    {#if $walletStore.isConnected}
+    {#if $sessionStore.isConnected}
       <div class="alert alert-success">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div>
-          <h3 class="font-bold">Connected to {$walletStore.walletName}</h3>
-          <div class="text-xs opacity-70">{$walletStore.address}</div>
+          <h3 class="font-bold">Connected to {$sessionStore.name}</h3>
+          <div class="text-xs opacity-70">{$sessionStore.address}</div>
         </div>
       </div>
       

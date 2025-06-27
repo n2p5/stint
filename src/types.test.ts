@@ -4,7 +4,7 @@ import type {
   PasskeyCredential,
   StintConfig,
   DelegationConfig,
-  SessionWalletConfig,
+  SessionSignerConfig,
   AuthzGrantInfo,
   FeegrantInfo,
 } from './types'
@@ -35,7 +35,7 @@ describe('type exports', () => {
       allowedRecipients: ['cosmos1...'],
     }
 
-    const sessionWalletConfig: SessionWalletConfig = {
+    const sessionSignerConfig: SessionSignerConfig = {
       primaryClient: {} as unknown as SigningStargateClient,
       saltName: 'test-salt',
     }
@@ -54,14 +54,14 @@ describe('type exports', () => {
     expect(passkeyCredential.id).toBe('test-id')
     expect(stintConfig.spendLimit?.denom).toBe('uatom')
     expect(delegationConfig.gasLimit?.amount).toBe('500')
-    expect(sessionWalletConfig.saltName).toBe('test-salt')
+    expect(sessionSignerConfig.saltName).toBe('test-salt')
     expect(authzGrantInfo.authorization).toBeDefined()
     expect(feegrantInfo.allowance).toBeDefined()
   })
 
   it('should handle optional fields correctly', () => {
     // Minimal configs with only required fields
-    const minimalSessionWalletConfig: SessionWalletConfig = {
+    const minimalSessionSignerConfig: SessionSignerConfig = {
       primaryClient: {} as unknown as SigningStargateClient,
       // saltName is optional
     }
@@ -75,7 +75,7 @@ describe('type exports', () => {
       // expiration is optional
     }
 
-    expect(minimalSessionWalletConfig.saltName).toBeUndefined()
+    expect(minimalSessionSignerConfig.saltName).toBeUndefined()
     expect(minimalDelegationConfig.sessionExpiration).toBeUndefined()
     expect(minimalAuthzInfo.expiration).toBeUndefined()
   })

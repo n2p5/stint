@@ -2,24 +2,24 @@ import { sha256 } from '@cosmjs/crypto'
 import { toHex, fromBase64 } from '@cosmjs/encoding'
 
 // Public interfaces
-export interface PasskeyWallet {
+export interface DerivedKey {
   credentialId: string
   privateKey: string // hex encoded
 }
 
-export interface PasskeyOptions {
-  walletAddress: string // Cosmos wallet address as userID
+export interface PasskeyConfig {
+  address: string // Cosmos address as userID
   displayName?: string // Optional display name
-  saltName?: string // Salt for key derivation (default: 'stint-wallet')
+  saltName?: string // Salt for key derivation (default: 'stint-session')
 }
 
 /**
- * Get or create a passkey wallet for the current domain
+ * Get or create a derived key from passkey for the current domain
  * - Checks for existing passkey with PRF support
  * - Creates new one if none exists or PRF not supported
  * - Returns derived private key
  */
-export async function getOrCreatePasskeyWallet(options: PasskeyOptions): Promise<PasskeyWallet> {
+export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<DerivedKey> {
   if (!window.PublicKeyCredential) {
     throw new Error('WebAuthn not supported')
   }
@@ -29,8 +29,8 @@ export async function getOrCreatePasskeyWallet(options: PasskeyOptions): Promise
 
   try {
     existingCredential = await getExistingPasskey(
-      options.walletAddress,
-      options.saltName || 'stint-wallet'
+      options.address,
+      options.saltName || 'stint-session'
     )
   } catch (error) {
     // If user cancelled during existing passkey check, don't proceed to create
@@ -43,7 +43,7 @@ export async function getOrCreatePasskeyWallet(options: PasskeyOptions): Promise
     // Otherwise, no existing credential found, continue to create
   }
 
-  const saltName = options.saltName || 'stint-wallet'
+  const saltName = options.saltName || 'stint-session'
 
   // If we found an existing credential, try to use it
   if (existingCredential) {
@@ -81,8 +81,8 @@ export async function getOrCreatePasskeyWallet(options: PasskeyOptions): Promise
 
   // Create new passkey
   const credential = await createPasskey({
-    userName: options.walletAddress,
-    userDisplayName: options.displayName || `Stint: ${options.walletAddress.slice(0, 10)}...`,
+    userName: options.address,
+    userDisplayName: options.displayName || `Stint: ${options.address.slice(0, 10)}...`,
   })
 
   const privateKey = await derivePrivateKey(credential.id, saltName)
@@ -94,7 +94,7 @@ export async function getOrCreatePasskeyWallet(options: PasskeyOptions): Promise
 }
 
 // Internal interfaces
-interface InternalPasskeyOptions {
+interface InternalPasskeyConfig {
   userName: string
   userDisplayName: string
 }
@@ -107,8 +107,8 @@ interface ExistingCredential {
 
 // Check for existing passkey with PRF support
 async function getExistingPasskey(
-  _walletAddress: string,
-  saltName: string = 'stint-wallet'
+  _address: string,
+  saltName: string = 'stint-session'
 ): Promise<ExistingCredential | null> {
   const challenge = crypto.getRandomValues(new Uint8Array(32))
   const saltBytes = new TextEncoder().encode(saltName)
@@ -166,14 +166,14 @@ async function getExistingPasskey(
 }
 
 // Create a new passkey credential with PRF extension
-async function createPasskey(options: InternalPasskeyOptions): Promise<PublicKeyCredential> {
+async function createPasskey(options: InternalPasskeyConfig): Promise<PublicKeyCredential> {
   const challenge = crypto.getRandomValues(new Uint8Array(32))
 
   const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
     challenge,
     rp: {
       id: window.location.hostname,
-      name: 'Stint Wallet',
+      name: 'Stint Session Signer',
     },
     user: {
       id: new TextEncoder().encode(options.userName),
@@ -282,7 +282,7 @@ async function getPasskeyPRF(credentialId: string, salt: Uint8Array): Promise<Ui
 // Derive a private key from passkey PRF output
 async function derivePrivateKey(
   credentialId: string,
-  salt: string = 'stint-wallet'
+  salt: string = 'stint-session'
 ): Promise<string> {
   const saltBytes = new TextEncoder().encode(salt)
 

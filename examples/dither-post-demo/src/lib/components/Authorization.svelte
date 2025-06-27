@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { walletStore } from '$lib/stores/wallet';
+  import { sessionStore } from '$lib/stores/session';
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
+  import { DITHER_ADDRESS } from '$lib/constants';
   
   let isChecking = false;
   let isAuthorizing = false;
@@ -12,40 +13,33 @@
   let successTx = '';
   let revokeTx = '';
   
-  // Reactive check when session wallet changes
-  $: if ($walletStore.sessionWallet) {
+  // Reactive check when session signer changes
+  $: if ($sessionStore.sessionSigner) {
     checkAuthorizations();
   }
   
   async function checkAuthorizations() {
-    if (!$walletStore.sessionWallet) return;
+    if (!$sessionStore.sessionSigner) return;
     
     isChecking = true;
     try {
       const [authz, feegrant] = await Promise.all([
-        $walletStore.sessionWallet.hasAuthzGrant(),
-        $walletStore.sessionWallet.hasFeegrant()
+        $sessionStore.sessionSigner.hasAuthzGrant(),
+        $sessionStore.sessionSigner.hasFeegrant()
       ]);
       
       hasAuthzGrant = !!authz;
       hasFeegrant = !!feegrant;
       
-      // Debug: Log feegrant details
-      if (feegrant) {
-        console.log('Feegrant details:', feegrant);
-        if (feegrant.allowance?.allowance?.spend_limit) {
-          console.log('Feegrant spend limits:', feegrant.allowance.allowance.spend_limit);
-        }
-      }
     } catch (err) {
-      console.error('Failed to check authorizations:', err);
+      // Error checking authorizations
     } finally {
       isChecking = false;
     }
   }
   
   async function createAuthorizations() {
-    if (!$walletStore.sessionWallet || !$walletStore.signer) return;
+    if (!$sessionStore.sessionSigner || !$sessionStore.signer) return;
     
     isAuthorizing = true;
     error = '';
@@ -56,25 +50,24 @@
       // Check primary wallet balance
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
-        $walletStore.signer,
+        $sessionStore.signer,
         {
           gasPrice: GasPrice.fromString('0.025uphoton')
         }
       );
       
-      const primaryAddress = $walletStore.sessionWallet.primaryAddress();
+      const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       const photonBalance = await primaryClient.getBalance(primaryAddress, 'uphoton');
-      console.log('Primary wallet PHOTON balance:', photonBalance);
       
       if (parseInt(photonBalance.amount) < 2000000) {
         throw new Error(`Insufficient PHOTON balance. You have ${photonBalance.amount} uphoton but need at least 2,000,000 uphoton (2 PHOTON).`);
       }
       // Generate delegation messages with Dither testnet as authorized recipient
-      const messages = $walletStore.sessionWallet.generateDelegationMessages({
+      const messages = $sessionStore.sessionSigner.generateDelegationMessages({
         sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
         spendLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON
         gasLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON gas
-        allowedRecipients: ['atone1uq6zjslvsa29cy6uu75y8txnl52mw06j6fzlep'] // Dither testnet
+        allowedRecipients: [DITHER_ADDRESS] // Dither testnet
       });
       
       // Broadcast transaction (reuse the primaryClient and primaryAddress from above)
@@ -82,7 +75,7 @@
         primaryAddress,
         messages,
         'auto',
-        'Stint session wallet authorization'
+        'Stint session signer authorization'
       );
       
       if (result.code !== 0) {
@@ -101,7 +94,7 @@
   }
   
   async function revokeAuthorizations() {
-    if (!$walletStore.sessionWallet || !$walletStore.signer) return;
+    if (!$sessionStore.sessionSigner || !$sessionStore.signer) return;
     
     isRevoking = true;
     error = '';
@@ -110,24 +103,24 @@
     
     try {
       // Generate revocation messages
-      const messages = $walletStore.sessionWallet.revokeDelegationMessages();
+      const messages = $sessionStore.sessionSigner.revokeDelegationMessages();
       
       // Create primary client for broadcasting
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
-        $walletStore.signer,
+        $sessionStore.signer,
         {
           gasPrice: GasPrice.fromString('0.025uphoton')
         }
       );
       
       // Broadcast transaction
-      const primaryAddress = $walletStore.sessionWallet.primaryAddress();
+      const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       const result = await primaryClient.signAndBroadcast(
         primaryAddress,
         messages,
         'auto',
-        'Stint session wallet revocation'
+        'Stint session signer revocation'
       );
       
       if (result.code !== 0) {
@@ -150,7 +143,7 @@
   <div class="card-body">
     <h2 class="card-title">Step 3: Create Authorization</h2>
     
-    {#if $walletStore.sessionWallet}
+    {#if $sessionStore.sessionSigner}
       {#if isChecking}
         <div class="flex items-center gap-2">
           <span class="loading loading-spinner"></span>
@@ -219,7 +212,7 @@
           
           {#if !hasAuthzGrant || !hasFeegrant}
             <p class="text-base-content/70">
-              Create authorization grants to allow your session wallet to post to Dither testnet on behalf of your main wallet.
+              Create authorization grants to allow your session signer to post to Dither testnet on behalf of your primary address.
             </p>
             
             <div class="card-actions">
@@ -278,7 +271,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-info shrink-0 w-6 h-6">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
-        <span>Please create a session wallet first</span>
+        <span>Please create a session signer first</span>
       </div>
     {/if}
   </div>

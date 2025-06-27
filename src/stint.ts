@@ -7,50 +7,50 @@ import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
 import {
-  SessionWallet,
-  SessionWalletConfig,
+  SessionSigner,
+  SessionSignerConfig,
   AuthzGrantInfo,
   FeegrantInfo,
   DelegationConfig,
 } from './types'
-import { getOrCreatePasskeyWallet } from './passkey'
+import { getOrCreateDerivedKey } from './passkey'
 
 // ============================================================================
-// SESSION WALLET CREATION
+// SESSION SIGNER CREATION
 // ============================================================================
 
 /**
- * Create a complete session wallet in one step
- * Combines passkey creation, wallet derivation, and chain connection
+ * Create a complete session signer in one step
+ * Combines passkey creation, signer derivation, and chain connection
  * @param config - Configuration with primary client and optional salt name
- * @returns Initialized SessionWallet ready for use
+ * @returns Initialized SessionSigner ready for use
  */
-export async function newSessionWallet(config: SessionWalletConfig): Promise<SessionWallet> {
+export async function newSessionSigner(config: SessionSignerConfig): Promise<SessionSigner> {
   // Extract the signer from the client and get accounts
-  const primaryWallet = (config.primaryClient as any).signer as OfflineSigner
-  if (!primaryWallet) {
+  const primarySigner = (config.primaryClient as any).signer as OfflineSigner
+  if (!primarySigner) {
     throw new Error('Could not extract signer from primary client')
   }
 
-  const primaryAccounts = await primaryWallet.getAccounts()
+  const primaryAccounts = await primarySigner.getAccounts()
   const primaryAddress = primaryAccounts[0].address
 
   // Extract prefix from primary address (e.g., 'atone' from 'atone1...')
   const prefix = primaryAddress.match(/^([a-z]+)1/)?.[1] || 'atom'
 
-  // Get or create passkey wallet for this primary address
-  const passkeyWallet = await getOrCreatePasskeyWallet({
-    walletAddress: primaryAddress,
+  // Get or create derived key for this primary address
+  const derivedKey = await getOrCreateDerivedKey({
+    address: primaryAddress,
     displayName: `Stint: ${primaryAddress.slice(0, 10)}...`,
-    saltName: config.saltName || 'stint-wallet',
+    saltName: config.saltName || 'stint-session',
   })
 
-  // Create the session wallet from the derived private key with same prefix as primary
-  const privateKey = fromHex(passkeyWallet.privateKey)
-  const sessionWallet = await DirectSecp256k1Wallet.fromKey(privateKey, prefix)
+  // Create the session signer from the derived private key with same prefix as primary
+  const privateKey = fromHex(derivedKey.privateKey)
+  const sessionSigner = await DirectSecp256k1Wallet.fromKey(privateKey, prefix)
 
-  // Get the session wallet address
-  const sessionAccounts = await sessionWallet.getAccounts()
+  // Get the session signer address
+  const sessionAccounts = await sessionSigner.getAccounts()
   const sessionAddress = sessionAccounts[0].address
 
   // Extract RPC URL from the primary client's cometClient
@@ -59,28 +59,33 @@ export async function newSessionWallet(config: SessionWalletConfig): Promise<Ses
     throw new Error('Could not extract RPC URL from primary client')
   }
 
-  // Create a new client for the session wallet using the same RPC endpoint as primary
+  // Create a new client for the session signer using the same RPC endpoint as primary
   // Ensure we use a proper GasPrice object
-  const originalGasPrice = (config.primaryClient as any).gasPrice;
-  let gasPrice;
-  
-  if (originalGasPrice && typeof originalGasPrice === 'object' && originalGasPrice.denom && originalGasPrice.amount) {
+  const originalGasPrice = (config.primaryClient as any).gasPrice
+  let gasPrice
+
+  if (
+    originalGasPrice &&
+    typeof originalGasPrice === 'object' &&
+    originalGasPrice.denom &&
+    originalGasPrice.amount
+  ) {
     // Convert object format to proper GasPrice
-    gasPrice = GasPrice.fromString(`${originalGasPrice.amount}${originalGasPrice.denom}`);
+    gasPrice = GasPrice.fromString(`${originalGasPrice.amount}${originalGasPrice.denom}`)
   } else if (typeof originalGasPrice === 'string') {
-    gasPrice = GasPrice.fromString(originalGasPrice);
+    gasPrice = GasPrice.fromString(originalGasPrice)
   } else {
     // Default fallback
-    gasPrice = GasPrice.fromString('0.025uphoton');
+    gasPrice = GasPrice.fromString('0.025uphoton')
   }
-  
-  const client = await SigningStargateClient.connectWithSigner(rpcUrl, sessionWallet, {
+
+  const client = await SigningStargateClient.connectWithSigner(rpcUrl, sessionSigner, {
     gasPrice,
   })
 
-  const wallet: SessionWallet = {
-    primaryWallet,
-    sessionWallet,
+  const signer: SessionSigner = {
+    primarySigner,
+    sessionSigner,
     client,
 
     // Methods - now synchronous with cached addresses
@@ -103,7 +108,7 @@ export async function newSessionWallet(config: SessionWalletConfig): Promise<Ses
       revokeDelegationMessagesFn(primaryAddress, sessionAddress, msgTypeUrl),
   }
 
-  return wallet
+  return signer
 }
 
 // ============================================================================
@@ -206,13 +211,13 @@ export function dateToTimestamp(date: Date): Timestamp {
   return Timestamp.fromPartial({ seconds: BigInt(seconds), nanos })
 }
 
-// Generate authz grant and feegrant messages for session wallet delegation
+// Generate authz grant and feegrant messages for session signer delegation
 function generateDelegationMessagesFn(
   primaryAddress: string,
   sessionAddress: string,
   config: DelegationConfig
 ): EncodeObject[] {
-  // Primary wallet grants session wallet limited send authorization
+  // Primary address grants session address limited send authorization
   const spendLimitCoins: Coin[] = config.spendLimit
     ? [Coin.fromPartial({ denom: config.spendLimit.denom, amount: config.spendLimit.amount })]
     : [Coin.fromPartial({ denom: 'uphoton', amount: '10000000' })] // Default 10 PHOTON limit
@@ -241,7 +246,7 @@ function generateDelegationMessagesFn(
     },
   }
 
-  // Primary wallet grants session wallet fee allowance
+  // Primary address grants session address fee allowance
   const gasLimitCoins: Coin[] = config.gasLimit
     ? [Coin.fromPartial({ denom: config.gasLimit.denom, amount: config.gasLimit.amount })]
     : [Coin.fromPartial({ denom: 'uphoton', amount: '10000000' })] // Default 10 PHOTON for gas

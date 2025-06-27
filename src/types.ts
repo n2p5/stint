@@ -20,7 +20,7 @@ export interface StintConfig {
   allowedRecipients?: string[]
 }
 
-export interface SessionWalletConfig {
+export interface SessionSignerConfig {
   primaryClient: SigningStargateClient
   saltName?: string
 }
@@ -48,9 +48,9 @@ export interface FeegrantInfo {
   expiration?: Date
 }
 
-export interface SessionWallet {
-  primaryWallet: OfflineSigner
-  sessionWallet: DirectSecp256k1Wallet
+export interface SessionSigner {
+  primarySigner: OfflineSigner
+  sessionSigner: DirectSecp256k1Wallet
   client: SigningStargateClient
 
   // Methods - synchronous with cached addresses

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { sha256 } from '@cosmjs/crypto'
 import { toHex } from '@cosmjs/encoding'
-import { getOrCreatePasskeyWallet } from './passkey'
+import { getOrCreateDerivedKey } from './passkey'
 import { setupWebAuthnMock, cleanupWebAuthnMock } from './test-utils/webauthn-mock'
 
 describe('passkey utilities', () => {
@@ -35,7 +35,7 @@ describe('passkey utilities', () => {
 
   describe('salt encoding', () => {
     it('should encode salt strings consistently', () => {
-      const salt = 'stint-wallet'
+      const salt = 'stint-session'
       const encoded1 = new TextEncoder().encode(salt)
       const encoded2 = new TextEncoder().encode(salt)
 
@@ -44,8 +44,8 @@ describe('passkey utilities', () => {
     })
 
     it('should produce different encodings for different salts', () => {
-      const salt1 = 'stint-wallet'
-      const salt2 = 'trading-wallet'
+      const salt1 = 'stint-session'
+      const salt2 = 'trading-session'
 
       const encoded1 = new TextEncoder().encode(salt1)
       const encoded2 = new TextEncoder().encode(salt2)
@@ -54,7 +54,7 @@ describe('passkey utilities', () => {
     })
   })
 
-  describe('getOrCreatePasskeyWallet', () => {
+  describe('getOrCreateDerivedKey', () => {
     let mockWebAuthn: ReturnType<typeof setupWebAuthnMock>
 
     beforeEach(() => {
@@ -77,13 +77,13 @@ describe('passkey utilities', () => {
         })
       })
 
-      it('should create a new passkey wallet when none exists', async () => {
+      it('should create a new passkey derived key when none exists', async () => {
         // Mock no existing credentials
         mockWebAuthn.mockGet.mockResolvedValueOnce(null)
 
-        const result = await getOrCreatePasskeyWallet({
-          walletAddress: 'cosmos1test123',
-          displayName: 'Test Wallet',
+        const result = await getOrCreateDerivedKey({
+          address: 'cosmos1test123',
+          displayName: 'Test Key',
           saltName: 'test-salt',
         })
 
@@ -93,9 +93,9 @@ describe('passkey utilities', () => {
       })
 
       it('should reuse existing passkey when available', async () => {
-        const result = await getOrCreatePasskeyWallet({
-          walletAddress: 'cosmos1test123',
-          displayName: 'Test Wallet',
+        const result = await getOrCreateDerivedKey({
+          address: 'cosmos1test123',
+          displayName: 'Test Key',
           saltName: 'test-salt',
         })
 
@@ -107,8 +107,8 @@ describe('passkey utilities', () => {
       it('should use default display name when not provided', async () => {
         mockWebAuthn.mockGet.mockResolvedValueOnce(null)
 
-        await getOrCreatePasskeyWallet({
-          walletAddress: 'cosmos1verylongaddress123456789',
+        await getOrCreateDerivedKey({
+          address: 'cosmos1verylongaddress123456789',
         })
 
         expect(mockWebAuthn.mockCreate).toHaveBeenCalledWith(
@@ -123,8 +123,8 @@ describe('passkey utilities', () => {
       })
 
       it('should produce different keys for different salts', async () => {
-        const result1 = await getOrCreatePasskeyWallet({
-          walletAddress: 'cosmos1test123',
+        const result1 = await getOrCreateDerivedKey({
+          address: 'cosmos1test123',
           saltName: 'salt1',
         })
 
@@ -147,8 +147,8 @@ describe('passkey utilities', () => {
             }) as any
         )
 
-        const result2 = await getOrCreatePasskeyWallet({
-          walletAddress: 'cosmos1test123',
+        const result2 = await getOrCreateDerivedKey({
+          address: 'cosmos1test123',
           saltName: 'salt2',
         })
 
@@ -165,16 +165,16 @@ describe('passkey utilities', () => {
         mockWebAuthn.mockGet.mockResolvedValueOnce(null)
 
         await expect(
-          getOrCreatePasskeyWallet({
-            walletAddress: 'cosmos1test123',
+          getOrCreateDerivedKey({
+            address: 'cosmos1test123',
           })
         ).rejects.toThrow('Passkey created but PRF extension not enabled')
       })
 
       it('should throw error when existing credential has no PRF support', async () => {
         await expect(
-          getOrCreatePasskeyWallet({
-            walletAddress: 'cosmos1test123',
+          getOrCreateDerivedKey({
+            address: 'cosmos1test123',
           })
         ).rejects.toThrow('Existing passkey does not support PRF extension')
       })
@@ -190,8 +190,8 @@ describe('passkey utilities', () => {
         })
 
         await expect(
-          getOrCreatePasskeyWallet({
-            walletAddress: 'cosmos1test123',
+          getOrCreateDerivedKey({
+            address: 'cosmos1test123',
           })
         ).rejects.toThrow()
 
@@ -208,8 +208,8 @@ describe('passkey utilities', () => {
         mockWebAuthn.mockCreate.mockRejectedValueOnce(new Error('User cancelled'))
 
         await expect(
-          getOrCreatePasskeyWallet({
-            walletAddress: 'cosmos1test123',
+          getOrCreateDerivedKey({
+            address: 'cosmos1test123',
           })
         ).rejects.toThrow('User cancelled')
       })

@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { walletStore } from '$lib/stores/wallet';
+  import { sessionStore } from '$lib/stores/session';
   import { onMount } from 'svelte';
+  import { DITHER_ADDRESS, DEFAULT_AMOUNT, DEFAULT_MEMO } from '$lib/constants';
   
-  let recipient = 'atone1uq6zjslvsa29cy6uu75y8txnl52mw06j6fzlep';
-  let amount = '100';
-  let memo = 'dither.Post("I\'m posting this from my stint wallet to dither using authz + feegrant delegation")';
+  let recipient = DITHER_ADDRESS;
+  let amount = DEFAULT_AMOUNT;
+  let memo = DEFAULT_MEMO;
   let isSending = false;
   let error = '';
   let successTx = '';
@@ -25,10 +26,10 @@
     };
   });
   
-  $: canSend = $walletStore.sessionWallet && recipient && amount && Number(amount) > 0 && cosmosModules;
+  $: canSend = $sessionStore.sessionSigner && recipient && amount && Number(amount) > 0 && cosmosModules;
   
   async function sendTransaction() {
-    if (!$walletStore.sessionWallet || !cosmosModules) return;
+    if (!$sessionStore.sessionSigner || !cosmosModules) return;
     
     isSending = true;
     error = '';
@@ -46,8 +47,8 @@
         throw new Error('Amount must be a positive integer between 1 and 1,000,000 uphoton (1 PHOTON)');
       }
       
-      const primaryAddress = $walletStore.sessionWallet.primaryAddress();
-      const sessionAddress = $walletStore.sessionWallet.sessionAddress();
+      const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
+      const sessionAddress = $sessionStore.sessionSigner.sessionAddress();
       
       // Create MsgSend message
       const msgSend = cosmosModules.MsgSend.fromPartial({
@@ -72,24 +73,15 @@
         }
       };
       
-      // Send transaction using session wallet with explicit fee (PHOTON only + granter)
+      // Send transaction using session signer with explicit fee (PHOTON only + granter)
       const fee = {
         amount: [{ denom: 'uphoton', amount: '5000' }],
         gas: '200000',
         granter: primaryAddress, // This tells the chain to use the feegrant!
       };
       
-      // Debug: Log the transaction details
-      console.log('Transaction details:');
-      console.log('- Primary address (from):', primaryAddress);
-      console.log('- Session address (signer):', sessionAddress);
-      console.log('- Recipient (to):', recipient);
-      console.log('- Amount:', amount, 'uphoton');
-      console.log('- Fee:', fee);
-      console.log('- MsgSend:', msgSend);
-      console.log('- MsgExec:', execMsg);
       
-      const result = await $walletStore.sessionWallet.client.signAndBroadcast(
+      const result = await $sessionStore.sessionSigner.client.signAndBroadcast(
         sessionAddress,
         [execMsg],
         fee,
@@ -103,9 +95,9 @@
       successTx = result.transactionHash;
       
       // Reset form on success
-      recipient = 'atone1uq6zjslvsa29cy6uu75y8txnl52mw06j6fzlep';
-      amount = '100';
-      memo = 'dither.Post("I\'m posting this from my stint wallet to dither using authz + feegrant delegation")';
+      recipient = DITHER_ADDRESS;
+      amount = DEFAULT_AMOUNT;
+      memo = DEFAULT_MEMO;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to send transaction';
     } finally {
@@ -118,7 +110,7 @@
   <div class="card-body">
     <h2 class="card-title">Step 4: Post to Dither</h2>
     
-    {#if $walletStore.sessionWallet}
+    {#if $sessionStore.sessionSigner}
       <div class="space-y-4">
         {#if successTx}
           <div class="alert alert-success">
@@ -193,7 +185,7 @@
           </svg>
           <div>
             <p><strong>Dither Integration:</strong> Post to decentralized social network</p>
-            <p class="text-sm opacity-70">Session wallet posts on behalf of your primary wallet</p>
+            <p class="text-sm opacity-70">Session signer posts on behalf of your primary address</p>
           </div>
         </div>
         

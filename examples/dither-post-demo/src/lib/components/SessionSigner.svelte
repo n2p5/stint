@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { walletStore } from '$lib/stores/wallet';
-  import { newSessionWallet } from 'stint';
+  import { sessionStore } from '$lib/stores/session';
+  import { newSessionSigner } from 'stint-signer';
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
   
@@ -12,29 +12,29 @@
     error = '';
     
     try {
-      if (!$walletStore.signer) throw new Error('No wallet connected');
+      if (!$sessionStore.signer) throw new Error('No wallet connected');
       
       // Create primary client
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
-        $walletStore.signer,
+        $sessionStore.signer,
         {
           gasPrice: GasPrice.fromString('0.025uphoton')
         }
       );
       
-      // Create session wallet
-      const sessionWallet = await newSessionWallet({
+      // Create session signer
+      const sessionSigner = await newSessionSigner({
         primaryClient,
-        saltName: 'stint-wallet'
+        saltName: 'stint-session'
       });
       
-      walletStore.update(state => ({
+      sessionStore.update(state => ({
         ...state,
-        sessionWallet
+        sessionSigner
       }));
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to create session wallet';
+      error = err instanceof Error ? err.message : 'Failed to create session signer';
     } finally {
       isCreating = false;
     }
@@ -47,29 +47,29 @@
 
 <div class="card bg-base-100 shadow-xl">
   <div class="card-body">
-    <h2 class="card-title">Step 2: Create Session Wallet</h2>
+    <h2 class="card-title">Step 2: Create Session Signer</h2>
     
-    {#if $walletStore.sessionWallet}
+    {#if $sessionStore.sessionSigner}
       <div class="space-y-4">
         <div class="alert alert-success">
           <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Session wallet created successfully!</span>
+          <span>Session signer created successfully!</span>
         </div>
         
         <div class="stats bg-primary text-primary-content">
           <div class="stat">
             <div class="stat-title text-primary-content/70">Primary Address</div>
             <div class="stat-value text-lg">
-              {formatAddress($walletStore.sessionWallet.primaryAddress())}
+              {formatAddress($sessionStore.sessionSigner.primaryAddress())}
             </div>
           </div>
           
           <div class="stat">
             <div class="stat-title text-primary-content/70">Session Address</div>
             <div class="stat-value text-lg">
-              {formatAddress($walletStore.sessionWallet.sessionAddress())}
+              {formatAddress($sessionStore.sessionSigner.sessionAddress())}
             </div>
           </div>
         </div>
@@ -78,12 +78,12 @@
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <span>Session wallet ready! Now create authorization grants to enable transactions.</span>
+          <span>Session signer ready! Now create authorization grants to enable transactions.</span>
         </div>
       </div>
-    {:else if $walletStore.isConnected}
+    {:else if $sessionStore.isConnected}
       <p class="text-base-content/70">
-        Create a session wallet using a Passkey. This wallet will be able to transact on behalf of your main wallet.
+        Create a session signer using a Passkey. This signer will be able to transact on behalf of your primary address.
       </p>
       
       {#if error}
@@ -104,7 +104,7 @@
           {#if isCreating}
             <span class="loading loading-spinner"></span>
           {/if}
-          Create Session Wallet
+          Create Session Signer
         </button>
       </div>
     {:else}
