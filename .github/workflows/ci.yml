@@ -10,10 +10,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [22.x, 24.x]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,10 +17,10 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22.x
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -49,10 +45,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
 
-    strategy:
-      matrix:
-        node-version: [22.x]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -60,10 +52,10 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22.x
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -72,10 +64,15 @@ jobs:
       - name: Run tests with coverage
         run: pnpm test:coverage
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Coverage Report
+        uses: irongut/CodeCoverageSummary@v1.3.0
         with:
-          file: ./coverage/coverage-final.json
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+          filename: coverage/cobertura-coverage.xml
+          badge: true
+          fail_below_min: false
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: both
+          thresholds: '60 80'
