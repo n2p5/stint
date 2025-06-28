@@ -1,6 +1,8 @@
 # Stint
 
-Short-lived, non-custodial session signers for the Cosmos SDK ecosystem.
+[![codecov](https://codecov.io/gh/n2p5/stint/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/n2p5/stint)
+
+Short-lived, non-custodial passkey based session signers for the Cosmos SDK ecosystem.
 
 > **⚠️ EXPERIMENTAL SOFTWARE WARNING**
 > 
@@ -16,6 +18,16 @@ Short-lived, non-custodial session signers for the Cosmos SDK ecosystem.
 ## Overview
 
 Stint enables users to create ephemeral session signers that can perform limited blockchain actions without requiring constant hardware wallet interaction. The system uses Cosmos SDK's `authz` and `feegrant` modules combined with WebAuthn Passkeys for secure, deterministic key derivation.
+
+## Why would I want this?
+
+A session signer, when narrowly scoped, can be useful for simplifying the User Experience (UX) for for social dApps that use a low fee and gas structure for on-chain interactivity.
+
+- **Social media interactions**: Enable users to "like", "repost", or comment on-chain without signing popups
+- **Profile and settings updates**: Make small changes to on-chain profiles or preferences seamlessly
+- **Gaming and play-to-earn**: Allow in-game actions like moves, item trades, or achievement claims without interrupting gameplay
+- **Recurring payments or tips**: Set up limited spending for content creators, subscriptions, or micro-donations
+- **DAO participation**: Vote on a set of proposals without hardware wallet interaction for each vote
 
 ## Key Concept
 
@@ -218,6 +230,53 @@ pnpm test:ui
 
 ## How It Works
 
+The Stint session signer system combines WebAuthn passkeys with Cosmos SDK's authz and feegrant modules to enable secure, non-custodial session signing:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant Passkey as WebAuthn Passkey
+    participant Primary as Primary Wallet
+    participant Session as Session Signer
+    participant Chain as Cosmos Chain
+
+    rect rgb(0, 100, 200)
+        Note over User, Session: 1. Session Signer Creation
+        User->>Browser: newSessionSigner()
+        Browser->>Passkey: Create/Authenticate with PRF
+        Passkey-->>Browser: PRF output
+        Browser->>Browser: Derive private key from PRF
+        Browser->>Session: Create session signer
+        Session-->>User: Return SessionSigner object
+    end
+
+    rect rgb(200, 100, 0)
+        Note over User, Chain: 2. Authorization Setup
+        User->>Session: generateDelegationMessages()
+        Session-->>User: Authz + Feegrant messages
+        User->>Primary: Sign messages
+        Primary->>Chain: Broadcast transaction
+        Chain->>Chain: Store authz grant
+        Chain->>Chain: Store feegrant allowance
+        Chain-->>User: Transaction confirmed
+    end
+
+    rect rgb(0, 150, 50)
+        Note over User, Chain: 3. Session Usage
+        User->>Session: sendTokens()
+        Session->>Session: Sign transaction
+        Session->>Chain: Submit transaction
+        Chain->>Chain: Verify authz grant
+        Chain->>Chain: Deduct from feegrant
+        Chain->>Chain: Transfer funds from Primary
+        Chain-->>User: Transaction success
+        Note right of Session: Session signer never holds funds!
+    end
+```
+
+### Detailed Flow
+
 1. **Passkey Creation**: Uses WebAuthn to create a passkey with PRF extension linked to your primary signer address
 2. **Key Derivation**: Derives a deterministic private key from the passkey PRF output using a configurable salt
 3. **Session Signer**: Creates an ephemeral signer from the derived key that never holds funds
@@ -309,6 +368,35 @@ const gamingSigner = await newSessionSigner({
 ```
 
 Each salt creates a completely different private key from the same passkey.
+
+## Risks
+
+When using session signers, be aware of these potential risks:
+
+### High Spending Limits Without Recipient Restrictions
+- **Risk**: Setting high `spendLimit` values without specifying `allowedRecipients` allows the session signer to send funds to ANY address
+- **Impact**: If the session key is compromised, an attacker could drain funds up to the spending limit
+- **Mitigation**: Always use `allowedRecipients` to restrict destinations, or keep spending limits minimal
+
+### Excessive Fee Allowances
+- **Risk**: Setting very high `gasLimit` values can allow a compromised session signer to waste funds on transaction fees
+- **Impact**: Malicious or buggy code could burn through your fee allowance unnecessarily
+- **Mitigation**: Set reasonable gas limits based on expected usage patterns
+
+### Long Expiration Times
+- **Risk**: Setting `sessionExpiration` far in the future increases the window of opportunity for attacks
+- **Impact**: A compromised key remains dangerous for longer periods
+- **Mitigation**: Use short expiration times (hours or days, not months) and renew as needed
+
+### Passkey Compromise
+- **Risk**: If your device or passkey is compromised, the attacker can recreate your session signer
+- **Impact**: They gain the same permissions you granted to the session signer
+- **Mitigation**: Revoke session signers immediately if device security is compromised
+
+### Application-Level Vulnerabilities
+- **Risk**: XSS, CSRF, or other web vulnerabilities could allow attackers to use your session signer
+- **Impact**: Unauthorized transactions within your granted permissions
+- **Mitigation**: Follow web security best practices and audit your application code
 
 ## Security Considerations
 
