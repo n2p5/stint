@@ -74,7 +74,7 @@ const hasAuthz = await sessionSigner.hasAuthzGrant()
 const hasFeegrant = await sessionSigner.hasFeegrant()
 
 // 3. Generate ready-to-broadcast delegation messages
-const authorizedRecipient = 'atom1recipient123...'
+const authorizedRecipient = 'atone1recipient123...'
 const setupMessages = sessionSigner.generateDelegationMessages({
   sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
   spendLimit: { denom: 'uphoton', amount: '1000000' },   // 1 PHOTON spending limit (can be uatom or uphoton)
@@ -126,7 +126,7 @@ async function stintExample() {
   const existingFeegrant = await sessionSigner.hasFeegrant()
   
   // 3. Define authorized recipient for restrictions
-  const authorizedRecipient = 'cosmos1isolatedaccountxyz123...'
+  const authorizedRecipient = 'atone1isolatedaccountxyz123...'
   
   if (!existingAuthz || !existingFeegrant) {
     // Generate ready-to-broadcast authorization messages with account scope restriction
@@ -488,7 +488,7 @@ The logger captures important events throughout the session signer lifecycle:
 Example log output:
 ```
 [Stint] Initializing session signer { saltName: 'my-app' }
-[Stint] Starting passkey derivation { address: 'cosmos1abc...', saltName: 'my-app' }  
+[Stint] Starting passkey derivation { address: 'atone1abc...', saltName: 'my-app' }  
 [Stint] Session key ready
 [Stint] Checking authz grant { messageType: '/cosmos.bank.v1beta1.MsgSend' }
 [Stint] Found authz grant { hasExpiration: true }
@@ -628,7 +628,7 @@ if (!hasAuthz || !hasFeegrant) {
     sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000),
     spendLimit: { denom: 'uphoton', amount: '1000000' },
     gasLimit: { denom: 'uphoton', amount: '500000' },
-    allowedRecipients: ['cosmos1specific...']
+    allowedRecipients: ['atone1specific...']
   })
   
   if (messages.length > 0) {

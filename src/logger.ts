@@ -20,7 +20,7 @@ export const consoleLogger: Logger = {
       console.debug(`[Stint] ${message}`)
     }
   },
-  
+
   info: (message: string, context?: Record<string, unknown>) => {
     if (context) {
       console.info(`[Stint] ${message}`, context)
@@ -28,7 +28,7 @@ export const consoleLogger: Logger = {
       console.info(`[Stint] ${message}`)
     }
   },
-  
+
   warn: (message: string, context?: Record<string, unknown>) => {
     if (context) {
       console.warn(`[Stint] ${message}`, context)
@@ -36,7 +36,7 @@ export const consoleLogger: Logger = {
       console.warn(`[Stint] ${message}`)
     }
   },
-  
+
   error: (message: string, error?: Error, context?: Record<string, unknown>) => {
     if (error && context) {
       console.error(`[Stint] ${message}`, error, context)

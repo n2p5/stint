@@ -34,6 +34,6 @@ export function createTxLink(txHash: string, displayLength: number = 16): TxLink
   return {
     hash: txHash,
     url: getTransactionUrl(txHash),
-    displayText: formatTxHash(txHash, displayLength)
+    displayText: formatTxHash(txHash, displayLength),
   }
 }

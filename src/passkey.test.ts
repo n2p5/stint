@@ -82,7 +82,7 @@ describe('passkey utilities', () => {
         mockWebAuthn.mockGet.mockResolvedValueOnce(null)
 
         const result = await getOrCreateDerivedKey({
-          address: 'cosmos1test123',
+          address: 'atone1test123',
           displayName: 'Test Key',
           saltName: 'test-salt',
         })
@@ -94,7 +94,7 @@ describe('passkey utilities', () => {
 
       it('should reuse existing passkey when available', async () => {
         const result = await getOrCreateDerivedKey({
-          address: 'cosmos1test123',
+          address: 'atone1test123',
           displayName: 'Test Key',
           saltName: 'test-salt',
         })
@@ -108,14 +108,14 @@ describe('passkey utilities', () => {
         mockWebAuthn.mockGet.mockResolvedValueOnce(null)
 
         await getOrCreateDerivedKey({
-          address: 'cosmos1verylongaddress123456789',
+          address: 'atone1verylongaddress123456789',
         })
 
         expect(mockWebAuthn.mockCreate).toHaveBeenCalledWith(
           expect.objectContaining({
             publicKey: expect.objectContaining({
               user: expect.objectContaining({
-                displayName: 'Stint: cosmos1ver...',
+                displayName: 'Stint: atone1ver...',
               }),
             }),
           })
@@ -124,7 +124,7 @@ describe('passkey utilities', () => {
 
       it('should produce different keys for different salts', async () => {
         const result1 = await getOrCreateDerivedKey({
-          address: 'cosmos1test123',
+          address: 'atone1test123',
           saltName: 'salt1',
         })
 
@@ -148,7 +148,7 @@ describe('passkey utilities', () => {
         )
 
         const result2 = await getOrCreateDerivedKey({
-          address: 'cosmos1test123',
+          address: 'atone1test123',
           saltName: 'salt2',
         })
 
@@ -166,7 +166,7 @@ describe('passkey utilities', () => {
 
         await expect(
           getOrCreateDerivedKey({
-            address: 'cosmos1test123',
+            address: 'atone1test123',
           })
         ).rejects.toThrow('Passkey created but PRF extension not enabled')
       })
@@ -174,7 +174,7 @@ describe('passkey utilities', () => {
       it('should throw error when existing credential has no PRF support', async () => {
         await expect(
           getOrCreateDerivedKey({
-            address: 'cosmos1test123',
+            address: 'atone1test123',
           })
         ).rejects.toThrow('Existing passkey does not support PRF extension')
       })
@@ -191,7 +191,7 @@ describe('passkey utilities', () => {
 
         await expect(
           getOrCreateDerivedKey({
-            address: 'cosmos1test123',
+            address: 'atone1test123',
           })
         ).rejects.toThrow()
 
@@ -209,7 +209,7 @@ describe('passkey utilities', () => {
 
         await expect(
           getOrCreateDerivedKey({
-            address: 'cosmos1test123',
+            address: 'atone1test123',
           })
         ).rejects.toThrow('User cancelled')
       })

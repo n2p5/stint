@@ -8,15 +8,15 @@ export const exampleLogger: Logger = {
   debug: (message: string, context?: Record<string, unknown>) => {
     console.log(`🔍 [Stint Debug] ${message}`, context ? context : '')
   },
-  
+
   info: (message: string, context?: Record<string, unknown>) => {
     console.log(`ℹ️ [Stint Info] ${message}`, context ? context : '')
   },
-  
+
   warn: (message: string, context?: Record<string, unknown>) => {
     console.warn(`⚠️ [Stint Warning] ${message}`, context ? context : '')
   },
-  
+
   error: (message: string, error?: Error, context?: Record<string, unknown>) => {
     console.error(`❌ [Stint Error] ${message}`, error, context ? context : '')
   },
@@ -31,17 +31,17 @@ export function createUILogger(setStatus: (status: string) => void): Logger {
     debug: (message: string, context?: Record<string, unknown>) => {
       exampleLogger.debug(message, context)
     },
-    
+
     info: (message: string, context?: Record<string, unknown>) => {
       exampleLogger.info(message, context)
       setStatus(message)
     },
-    
+
     warn: (message: string, context?: Record<string, unknown>) => {
       exampleLogger.warn(message, context)
       setStatus(`Warning: ${message}`)
     },
-    
+
     error: (message: string, error?: Error, context?: Record<string, unknown>) => {
       exampleLogger.error(message, error, context)
       setStatus(`Error: ${message}`)

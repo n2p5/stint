@@ -30,7 +30,7 @@ import { Logger, consoleLogger } from './logger'
  */
 export async function newSessionSigner(config: SessionSignerConfig): Promise<SessionSigner> {
   const logger = config.logger || consoleLogger
-  
+
   logger.debug('Initializing session signer', { saltName: config.saltName })
 
   // Type assertion to our extended interface
@@ -119,7 +119,12 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
     },
 
     // Methods - created by factory functions
-    hasAuthzGrant: createHasAuthzGrant(config.primaryClient, primaryAddress, sessionAddress, logger),
+    hasAuthzGrant: createHasAuthzGrant(
+      config.primaryClient,
+      primaryAddress,
+      sessionAddress,
+      logger
+    ),
     hasFeegrant: createHasFeegrant(config.primaryClient, primaryAddress, sessionAddress, logger),
 
     // Methods - message generation (implemented inline)
@@ -147,36 +152,35 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
 export function convertRpcToRestUrl(rpcUrl: string): string {
   try {
     const url = new globalThis.URL(rpcUrl)
-    
+
     // Validate protocol
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       throw new Error('Invalid protocol: only http/https allowed')
     }
-    
+
     // Convert RPC port to REST port
     if (url.port === '26657') {
       url.port = '1317'
     }
-    
+
     // Convert RPC subdomain to API subdomain
     if (url.hostname.startsWith('rpc.')) {
       url.hostname = url.hostname.replace('rpc.', 'api.')
     }
-    
+
     // Handle AtomOne testnet specific pattern: *-rpc.* -> *-api.*
     if (url.hostname.includes('-rpc.')) {
       url.hostname = url.hostname.replace('-rpc.', '-api.')
     }
-    
+
     // Return URL without trailing slash to avoid double slashes
     const urlString = url.toString()
     return urlString.endsWith('/') ? urlString.slice(0, -1) : urlString
   } catch (error) {
-    throw new StintError(
-      'Invalid RPC URL provided',
-      ErrorCodes.INVALID_RPC_URL,
-      { rpcUrl, error: error instanceof Error ? error.message : 'Unknown error' }
-    )
+    throw new StintError('Invalid RPC URL provided', ErrorCodes.INVALID_RPC_URL, {
+      rpcUrl,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
   }
 }
 
@@ -208,32 +212,32 @@ function createHasAuthzGrant(
 
       const restUrl = convertRpcToRestUrl(rpcUrl)
       const requestUrl = `${restUrl}/cosmos/authz/v1beta1/grants?granter=${primaryAddress}&grantee=${sessionAddress}&msg_type_url=${messageType}`
-      
-      logger.debug('Checking authz grant', { 
-        rpcUrl, 
-        restUrl, 
+
+      logger.debug('Checking authz grant', {
+        rpcUrl,
+        restUrl,
         requestUrl,
         granter: primaryAddress,
         grantee: sessionAddress,
-        messageType 
+        messageType,
       })
 
       const response = await fetch(requestUrl, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'stint-library/1.0.0'
+          Accept: 'application/json',
+          'User-Agent': 'stint-library/1.0.0',
         },
         signal: globalThis.AbortSignal.timeout(10000), // 10 second timeout
         // Security: Only allow specific response types
-        redirect: 'error' // Don't follow redirects for security
+        redirect: 'error', // Don't follow redirects for security
       })
 
       if (!response.ok) {
-        logger.debug('Authz grant check failed', { 
-          status: response.status, 
+        logger.debug('Authz grant check failed', {
+          status: response.status,
           statusText: response.statusText,
-          messageType 
+          messageType,
         })
         return null
       }
@@ -241,19 +245,20 @@ function createHasAuthzGrant(
       // Security: Validate response size and content type (only in real fetch environment)
       if (response.headers) {
         const contentLength = response.headers.get('content-length')
-        if (contentLength && parseInt(contentLength) > 1024 * 1024) { // 1MB limit
-          logger.warn('Authz grant response too large', { 
+        if (contentLength && parseInt(contentLength) > 1024 * 1024) {
+          // 1MB limit
+          logger.warn('Authz grant response too large', {
             contentLength,
-            messageType 
+            messageType,
           })
           return null
         }
 
         const contentType = response.headers.get('content-type')
         if (!contentType || !contentType.includes('application/json')) {
-          logger.warn('Invalid content type for authz grant response', { 
+          logger.warn('Invalid content type for authz grant response', {
             contentType,
-            messageType 
+            messageType,
           })
           return null
         }
@@ -261,7 +266,7 @@ function createHasAuthzGrant(
 
       const data = await response.json()
       logger.debug('Authz grant response', { data, messageType })
-      
+
       if (!data.grants || data.grants.length === 0) {
         logger.debug('No authz grants found', { messageType })
         return null
@@ -276,22 +281,22 @@ function createHasAuthzGrant(
     } catch (error) {
       // Handle specific error types for better debugging
       if (error instanceof globalThis.DOMException && error.name === 'TimeoutError') {
-        logger.warn('Authz grant check timed out', { 
+        logger.warn('Authz grant check timed out', {
           operation: 'hasAuthzGrant',
           messageType,
-          timeout: '10000ms'
+          timeout: '10000ms',
         })
       } else if (error instanceof TypeError && error.message.includes('fetch')) {
-        logger.warn('Network error during authz grant check', { 
+        logger.warn('Network error during authz grant check', {
           operation: 'hasAuthzGrant',
           messageType,
-          error: error.message
+          error: error.message,
         })
       } else {
-        logger.warn('Authz grant check failed', { 
+        logger.warn('Authz grant check failed', {
           operation: 'hasAuthzGrant',
           messageType,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
       return null
@@ -317,30 +322,30 @@ function createHasFeegrant(
 
       const restUrl = convertRpcToRestUrl(rpcUrl)
       const requestUrl = `${restUrl}/cosmos/feegrant/v1beta1/allowance/${primaryAddress}/${sessionAddress}`
-      
-      logger.debug('Checking feegrant', { 
-        rpcUrl, 
-        restUrl, 
+
+      logger.debug('Checking feegrant', {
+        rpcUrl,
+        restUrl,
         requestUrl,
         granter: primaryAddress,
-        grantee: sessionAddress
+        grantee: sessionAddress,
       })
 
       const response = await fetch(requestUrl, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'stint-library/1.0.0'
+          Accept: 'application/json',
+          'User-Agent': 'stint-library/1.0.0',
         },
         signal: globalThis.AbortSignal.timeout(10000), // 10 second timeout
         // Security: Only allow specific response types
-        redirect: 'error' // Don't follow redirects for security
+        redirect: 'error', // Don't follow redirects for security
       })
 
       if (!response.ok) {
-        logger.debug('Feegrant check failed', { 
-          status: response.status, 
-          statusText: response.statusText 
+        logger.debug('Feegrant check failed', {
+          status: response.status,
+          statusText: response.statusText,
         })
         return null
       }
@@ -348,17 +353,18 @@ function createHasFeegrant(
       // Security: Validate response size and content type (only in real fetch environment)
       if (response.headers) {
         const contentLength = response.headers.get('content-length')
-        if (contentLength && parseInt(contentLength) > 1024 * 1024) { // 1MB limit
-          logger.warn('Feegrant response too large', { 
-            contentLength 
+        if (contentLength && parseInt(contentLength) > 1024 * 1024) {
+          // 1MB limit
+          logger.warn('Feegrant response too large', {
+            contentLength,
           })
           return null
         }
 
         const contentType = response.headers.get('content-type')
         if (!contentType || !contentType.includes('application/json')) {
-          logger.warn('Invalid content type for feegrant response', { 
-            contentType 
+          logger.warn('Invalid content type for feegrant response', {
+            contentType,
           })
           return null
         }
@@ -378,19 +384,19 @@ function createHasFeegrant(
     } catch (error) {
       // Handle specific error types for better debugging
       if (error instanceof globalThis.DOMException && error.name === 'TimeoutError') {
-        logger.warn('Feegrant check timed out', { 
+        logger.warn('Feegrant check timed out', {
           operation: 'hasFeegrant',
-          timeout: '10000ms'
+          timeout: '10000ms',
         })
       } else if (error instanceof TypeError && error.message.includes('fetch')) {
-        logger.warn('Network error during feegrant check', { 
+        logger.warn('Network error during feegrant check', {
           operation: 'hasFeegrant',
-          error: error.message
+          error: error.message,
         })
       } else {
-        logger.warn('Feegrant check failed', { 
+        logger.warn('Feegrant check failed', {
           operation: 'hasFeegrant',
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
       return null
@@ -430,7 +436,7 @@ function generateDelegationMessagesFn(
     typeUrl: '/cosmos.bank.v1beta1.SendAuthorization',
     value: SendAuthorization.encode(sendAuth).finish(),
   })
-  
+
   // Create authz grant message with proper encoding
   const expirationDate = config.sessionExpiration || new Date(Date.now() + 24 * 60 * 60 * 1000) // Default 24 hours
   const authzGrant = {
@@ -457,7 +463,7 @@ function generateDelegationMessagesFn(
     typeUrl: '/cosmos.feegrant.v1beta1.BasicAllowance',
     value: BasicAllowance.encode(allowance).finish(),
   })
-  
+
   const feegrant = {
     granter: primaryAddress,
     grantee: sessionAddress,
@@ -508,15 +514,15 @@ async function generateConditionalDelegationMessagesFn(
 ): Promise<EncodeObject[]> {
   const primaryAddress = sessionSigner.primaryAddress()
   const sessionAddress = sessionSigner.sessionAddress()
-  
+
   // Check what grants already exist
   const [existingAuthz, existingFeegrant] = await Promise.all([
     sessionSigner.hasAuthzGrant(),
-    sessionSigner.hasFeegrant()
+    sessionSigner.hasFeegrant(),
   ])
-  
+
   const messages: EncodeObject[] = []
-  
+
   // Only create authz grant if it doesn't exist
   if (!existingAuthz) {
     const spendLimitCoins: Coin[] = config.spendLimit
@@ -532,7 +538,7 @@ async function generateConditionalDelegationMessagesFn(
       typeUrl: '/cosmos.bank.v1beta1.SendAuthorization',
       value: SendAuthorization.encode(sendAuth).finish(),
     })
-    
+
     const expirationDate = config.sessionExpiration || new Date(Date.now() + 24 * 60 * 60 * 1000)
     const authzGrant = {
       granter: primaryAddress,
@@ -548,7 +554,7 @@ async function generateConditionalDelegationMessagesFn(
       value: authzGrant,
     })
   }
-  
+
   // Only create feegrant if it doesn't exist
   if (!existingFeegrant) {
     const gasLimitCoins: Coin[] = config.gasLimit
@@ -564,7 +570,7 @@ async function generateConditionalDelegationMessagesFn(
       typeUrl: '/cosmos.feegrant.v1beta1.BasicAllowance',
       value: BasicAllowance.encode(allowance).finish(),
     })
-    
+
     const feegrant = {
       granter: primaryAddress,
       grantee: sessionAddress,
@@ -576,6 +582,6 @@ async function generateConditionalDelegationMessagesFn(
       value: feegrant,
     })
   }
-  
+
   return messages
 }

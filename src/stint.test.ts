@@ -62,56 +62,56 @@ describe('convertRpcToRestUrl', () => {
     {
       name: 'standard RPC URL with port',
       input: 'https://rpc.cosmos.directory:26657',
-      expected: 'https://api.cosmos.directory:1317'
+      expected: 'https://api.cosmos.directory:1317',
     },
     {
       name: 'HTTP RPC URL',
       input: 'http://localhost:26657',
-      expected: 'http://localhost:1317'
+      expected: 'http://localhost:1317',
     },
     {
       name: 'RPC URL without port',
       input: 'https://rpc.cosmos.directory',
-      expected: 'https://api.cosmos.directory'
+      expected: 'https://api.cosmos.directory',
     },
     {
       name: 'URL without RPC subdomain',
       input: 'https://cosmos.directory:26657',
-      expected: 'https://cosmos.directory:1317'
+      expected: 'https://cosmos.directory:1317',
     },
     {
       name: 'URL with path',
       input: 'https://rpc.cosmos.directory:26657/some/path',
-      expected: 'https://api.cosmos.directory:1317/some/path'
+      expected: 'https://api.cosmos.directory:1317/some/path',
     },
     {
       name: 'AtomOne testnet pattern',
       input: 'https://atomone-testnet-1-rpc.allinbits.services',
-      expected: 'https://atomone-testnet-1-api.allinbits.services'
-    }
+      expected: 'https://atomone-testnet-1-api.allinbits.services',
+    },
   ]
 
   const invalidTestCases = [
     {
       name: 'invalid protocol (ftp)',
       input: 'ftp://rpc.cosmos.directory:26657',
-      expectedError: 'Invalid RPC URL provided'
+      expectedError: 'Invalid RPC URL provided',
     },
     {
       name: 'invalid protocol (javascript)',
       input: 'javascript:alert(1)',
-      expectedError: 'Invalid RPC URL provided'
+      expectedError: 'Invalid RPC URL provided',
     },
     {
       name: 'malformed URL',
       input: 'not-a-url',
-      expectedError: 'Invalid RPC URL provided'
+      expectedError: 'Invalid RPC URL provided',
     },
     {
       name: 'empty string',
       input: '',
-      expectedError: 'Invalid RPC URL provided'
-    }
+      expectedError: 'Invalid RPC URL provided',
+    },
   ]
 
   validTestCases.forEach(({ name, input, expected }) => {
@@ -125,7 +125,7 @@ describe('convertRpcToRestUrl', () => {
     it(`should reject ${name}`, () => {
       expect(() => convertRpcToRestUrl(input)).toThrow(StintError)
       expect(() => convertRpcToRestUrl(input)).toThrow(expectedError)
-      
+
       try {
         convertRpcToRestUrl(input)
       } catch (error) {
@@ -149,7 +149,7 @@ describe('SessionSigner methods', () => {
         getAccounts: vi
           .fn()
           .mockResolvedValue([
-            { address: 'cosmos1primary123', algo: 'secp256k1', pubkey: new Uint8Array() },
+            { address: 'atone1primary123', algo: 'secp256k1', pubkey: new Uint8Array() },
           ]),
       },
       cometClient: {
@@ -165,7 +165,7 @@ describe('SessionSigner methods', () => {
       getAccounts: vi
         .fn()
         .mockResolvedValue([
-          { address: 'cosmos1session456', algo: 'secp256k1', pubkey: new Uint8Array() },
+          { address: 'atone1session456', algo: 'secp256k1', pubkey: new Uint8Array() },
         ]),
     } as unknown as DirectSecp256k1Wallet)
 
@@ -194,16 +194,16 @@ describe('SessionSigner methods', () => {
       // Check authz grant message
       const authzMessage = messages[0]
       expect(authzMessage.typeUrl).toBe('/cosmos.authz.v1beta1.MsgGrant')
-      expect(authzMessage.value.granter).toBe('cosmos1primary123')
-      expect(authzMessage.value.grantee).toBe('cosmos1session456')
+      expect(authzMessage.value.granter).toBe('atone1primary123')
+      expect(authzMessage.value.grantee).toBe('atone1session456')
       expect(authzMessage.value.grant?.authorization).toBeDefined()
       expect(authzMessage.value.grant?.expiration).toBeDefined()
 
       // Check feegrant message
       const feegrantMessage = messages[1]
       expect(feegrantMessage.typeUrl).toBe('/cosmos.feegrant.v1beta1.MsgGrantAllowance')
-      expect(feegrantMessage.value.granter).toBe('cosmos1primary123')
-      expect(feegrantMessage.value.grantee).toBe('cosmos1session456')
+      expect(feegrantMessage.value.granter).toBe('atone1primary123')
+      expect(feegrantMessage.value.grantee).toBe('atone1session456')
       expect(feegrantMessage.value.allowance).toBeDefined()
     })
 
@@ -259,7 +259,7 @@ describe('SessionSigner methods', () => {
 
     it('should handle allowed recipients list', () => {
       const config: DelegationConfig = {
-        allowedRecipients: ['cosmos1recipient1', 'cosmos1recipient2'],
+        allowedRecipients: ['atone1recipient1', 'atone1recipient2'],
       }
       const messages = signer.generateDelegationMessages(config)
       const authzMessage = messages[0]
@@ -286,15 +286,18 @@ describe('SessionSigner methods', () => {
 
       it('should generate only authz when feegrant exists', async () => {
         // Mock feegrant exists but authz doesn't
-        global.fetch = vi.fn()
+        global.fetch = vi
+          .fn()
           .mockResolvedValueOnce({
             ok: false,
             status: 404,
-            json: async () => ({ grants: [] })
+            json: async () => ({ grants: [] }),
           })
           .mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ allowance: { spendLimit: [{ denom: 'uphoton', amount: '1000000' }] } })
+            json: async () => ({
+              allowance: { spendLimit: [{ denom: 'uphoton', amount: '1000000' }] },
+            }),
           })
 
         const result = await signer.generateConditionalDelegationMessages({
@@ -307,15 +310,16 @@ describe('SessionSigner methods', () => {
 
       it('should generate only feegrant when authz exists', async () => {
         // Mock authz exists but feegrant doesn't
-        global.fetch = vi.fn()
+        global.fetch = vi
+          .fn()
           .mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+            json: async () => ({ grants: [{ authorization: {}, expiration: null }] }),
           })
           .mockResolvedValueOnce({
             ok: false,
             status: 404,
-            json: async () => ({})
+            json: async () => ({}),
           })
 
         const result = await signer.generateConditionalDelegationMessages({
@@ -328,14 +332,17 @@ describe('SessionSigner methods', () => {
 
       it('should generate no messages when both grants exist', async () => {
         // Mock both grants exist
-        global.fetch = vi.fn()
+        global.fetch = vi
+          .fn()
           .mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+            json: async () => ({ grants: [{ authorization: {}, expiration: null }] }),
           })
           .mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ allowance: { spendLimit: [{ denom: 'uphoton', amount: '1000000' }] } })
+            json: async () => ({
+              allowance: { spendLimit: [{ denom: 'uphoton', amount: '1000000' }] },
+            }),
           })
 
         const result = await signer.generateConditionalDelegationMessages({
@@ -391,15 +398,15 @@ describe('SessionSigner methods', () => {
           const feegrantMessage = messages[1]
 
           // Verify authz grant structure
-          expect(authzMessage.value.granter).toBe('cosmos1primary123')
-          expect(authzMessage.value.grantee).toBe('cosmos1session456')
+          expect(authzMessage.value.granter).toBe('atone1primary123')
+          expect(authzMessage.value.grantee).toBe('atone1session456')
           expect(authzMessage.value.grant?.authorization?.typeUrl).toBe(
             '/cosmos.bank.v1beta1.SendAuthorization'
           )
 
           // Verify feegrant structure
-          expect(feegrantMessage.value.granter).toBe('cosmos1primary123')
-          expect(feegrantMessage.value.grantee).toBe('cosmos1session456')
+          expect(feegrantMessage.value.granter).toBe('atone1primary123')
+          expect(feegrantMessage.value.grantee).toBe('atone1session456')
           expect(feegrantMessage.value.allowance?.typeUrl).toBe(
             '/cosmos.feegrant.v1beta1.BasicAllowance'
           )
@@ -442,8 +449,8 @@ describe('SessionSigner methods', () => {
         expect(feegrantMessage.value.allowance?.typeUrl).toBe(
           '/cosmos.feegrant.v1beta1.BasicAllowance'
         )
-        expect(feegrantMessage.value.granter).toBe('cosmos1primary123')
-        expect(feegrantMessage.value.grantee).toBe('cosmos1session456')
+        expect(feegrantMessage.value.granter).toBe('atone1primary123')
+        expect(feegrantMessage.value.grantee).toBe('atone1session456')
       })
     })
   })
@@ -454,12 +461,12 @@ describe('SessionSigner methods', () => {
       const revokeAuthzMessage = messages[0]
       const revokeFeegrantMessage = messages[1]
 
-      expect(revokeAuthzMessage.value.granter).toBe('cosmos1primary123')
-      expect(revokeAuthzMessage.value.grantee).toBe('cosmos1session456')
+      expect(revokeAuthzMessage.value.granter).toBe('atone1primary123')
+      expect(revokeAuthzMessage.value.grantee).toBe('atone1session456')
       expect(revokeAuthzMessage.value.msgTypeUrl).toBe('/cosmos.bank.v1beta1.MsgSend')
 
-      expect(revokeFeegrantMessage.value.granter).toBe('cosmos1primary123')
-      expect(revokeFeegrantMessage.value.grantee).toBe('cosmos1session456')
+      expect(revokeFeegrantMessage.value.granter).toBe('atone1primary123')
+      expect(revokeFeegrantMessage.value.grantee).toBe('atone1session456')
     })
 
     it('should use custom message type when provided', () => {
@@ -485,9 +492,9 @@ describe('SessionSigner methods', () => {
             if (header === 'content-length') return '2000000' // 2MB - too large
             if (header === 'content-type') return 'application/json'
             return null
-          })
+          }),
         },
-        json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+        json: async () => ({ grants: [{ authorization: {}, expiration: null }] }),
       })
 
       const result = await signer.hasAuthzGrant()
@@ -502,9 +509,9 @@ describe('SessionSigner methods', () => {
             if (header === 'content-length') return '1000'
             if (header === 'content-type') return 'text/plain' // Wrong content type
             return null
-          })
+          }),
         },
-        json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+        json: async () => ({ grants: [{ authorization: {}, expiration: null }] }),
       })
 
       const result = await signer.hasAuthzGrant()
@@ -603,10 +610,10 @@ describe('SessionSigner methods', () => {
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
-            'Accept': 'application/json',
-            'User-Agent': 'stint-library/1.0.0'
+            Accept: 'application/json',
+            'User-Agent': 'stint-library/1.0.0',
           }),
-          redirect: 'error'
+          redirect: 'error',
         })
       )
     })
@@ -625,9 +632,9 @@ describe('SessionSigner methods', () => {
             if (header === 'content-length') return '2000000' // 2MB - too large
             if (header === 'content-type') return 'application/json'
             return null
-          })
+          }),
         },
-        json: async () => ({ allowance: { test: 'data' } })
+        json: async () => ({ allowance: { test: 'data' } }),
       })
 
       const result = await signer.hasFeegrant()
@@ -642,9 +649,9 @@ describe('SessionSigner methods', () => {
             if (header === 'content-length') return '1000'
             if (header === 'content-type') return 'text/html' // Wrong content type
             return null
-          })
+          }),
         },
-        json: async () => ({ allowance: { test: 'data' } })
+        json: async () => ({ allowance: { test: 'data' } }),
       })
 
       const result = await signer.hasFeegrant()
@@ -659,8 +666,8 @@ describe('SessionSigner methods', () => {
           ok: true,
           json: async () => ({
             allowance: {
-              granter: 'cosmos1primary123',
-              grantee: 'cosmos1session456',
+              granter: 'atone1primary123',
+              grantee: 'atone1session456',
               allowance: {
                 '@type': '/cosmos.feegrant.v1beta1.BasicAllowance',
                 spend_limit: [{ denom: 'uphoton', amount: '10000000' }],
@@ -671,8 +678,8 @@ describe('SessionSigner methods', () => {
         },
         expectedResult: {
           allowance: {
-            granter: 'cosmos1primary123',
-            grantee: 'cosmos1session456',
+            granter: 'atone1primary123',
+            grantee: 'atone1session456',
             allowance: {
               '@type': '/cosmos.feegrant.v1beta1.BasicAllowance',
               spend_limit: [{ denom: 'uphoton', amount: '10000000' }],
@@ -709,8 +716,8 @@ describe('SessionSigner methods', () => {
           ok: true,
           json: async () => ({
             allowance: {
-              granter: 'cosmos1primary123',
-              grantee: 'cosmos1session456',
+              granter: 'atone1primary123',
+              grantee: 'atone1session456',
               allowance: {
                 '@type': '/cosmos.feegrant.v1beta1.BasicAllowance',
                 spend_limit: [{ denom: 'uphoton', amount: '10000000' }],
@@ -721,8 +728,8 @@ describe('SessionSigner methods', () => {
         },
         expectedResult: {
           allowance: {
-            granter: 'cosmos1primary123',
-            grantee: 'cosmos1session456',
+            granter: 'atone1primary123',
+            grantee: 'atone1session456',
             allowance: {
               '@type': '/cosmos.feegrant.v1beta1.BasicAllowance',
               spend_limit: [{ denom: 'uphoton', amount: '10000000' }],

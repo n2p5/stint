@@ -14,22 +14,20 @@ import { Logger, consoleLogger } from './logger'
  */
 function getSecureRpId(): string {
   const hostname = window.location.hostname
-  
+
   // Validate hostname format
   if (!hostname || hostname === 'localhost' || /^[\d.]+$/.test(hostname)) {
     // Allow localhost and IP addresses for development
     return hostname
   }
-  
+
   // For production domains, validate format
   if (!/^[a-zA-Z0-9.-]+$/.test(hostname)) {
-    throw new StintError(
-      'Invalid hostname for WebAuthn',
-      ErrorCodes.WEBAUTHN_NOT_SUPPORTED,
-      { hostname }
-    )
+    throw new StintError('Invalid hostname for WebAuthn', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, {
+      hostname,
+    })
   }
-  
+
   return hostname
 }
 
@@ -38,17 +36,15 @@ function getSecureRpId(): string {
  */
 function generateSecureChallenge(): Uint8Array {
   const challenge = crypto.getRandomValues(new Uint8Array(32))
-  
+
   // Validate we got proper random bytes (not all zeros)
   const sum = challenge.reduce((acc, byte) => acc + byte, 0)
   if (sum === 0) {
-    throw new StintError(
-      'Failed to generate secure challenge',
-      ErrorCodes.WEBAUTHN_NOT_SUPPORTED,
-      { reason: 'Insufficient entropy' }
-    )
+    throw new StintError('Failed to generate secure challenge', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, {
+      reason: 'Insufficient entropy',
+    })
   }
-  
+
   return challenge
 }
 
@@ -73,19 +69,17 @@ export interface PasskeyConfig {
  */
 export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<DerivedKey> {
   const logger = options.logger || consoleLogger
-  
-  logger.debug('Starting passkey derivation', { 
-    address: options.address.slice(0, 10) + '...', 
-    saltName: options.saltName 
+
+  logger.debug('Starting passkey derivation', {
+    address: options.address.slice(0, 10) + '...',
+    saltName: options.saltName,
   })
 
   if (!window.PublicKeyCredential) {
     logger.error('WebAuthn not supported in this browser')
-    throw new StintError(
-      'WebAuthn not supported',
-      ErrorCodes.WEBAUTHN_NOT_SUPPORTED,
-      { userAgent: navigator.userAgent }
-    )
+    throw new StintError('WebAuthn not supported', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, {
+      userAgent: navigator.userAgent,
+    })
   }
 
   // First, try to get existing credential
@@ -104,11 +98,10 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
       (error.name === 'NotAllowedError' || error.name === 'AbortError')
     ) {
       logger.warn('User cancelled passkey operation')
-      throw new StintError(
-        'Passkey operation cancelled',
-        ErrorCodes.USER_CANCELLED,
-        { operation: 'getExisting', error: error.message }
-      )
+      throw new StintError('Passkey operation cancelled', ErrorCodes.USER_CANCELLED, {
+        operation: 'getExisting',
+        error: error.message,
+      })
     }
     // Otherwise, no existing credential found, continue to create
     logger.debug('No existing passkey found, will create new one')
@@ -119,7 +112,7 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
   // If we found an existing credential, try to use it
   if (existingCredential) {
     logger.debug('Found existing passkey')
-    
+
     if (existingCredential.prfSupported && existingCredential.prfOutput) {
       // Use the PRF output we already got to derive the private key
       const privateKey = sha256(existingCredential.prfOutput)
@@ -152,7 +145,7 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
         }
         // For other errors, we'll fall through to create a new passkey
         logger.warn('Failed to derive key from existing passkey, will create new one', {
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         })
       }
     } else {
@@ -167,10 +160,13 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
 
   // Create new passkey
   logger.debug('Creating new passkey')
-  const credential = await createPasskey({
-    userName: options.address,
-    userDisplayName: options.displayName || `Stint: ${options.address.slice(0, 10)}...`,
-  }, logger)
+  const credential = await createPasskey(
+    {
+      userName: options.address,
+      userDisplayName: options.displayName || `Stint: ${options.address.slice(0, 10)}...`,
+    },
+    logger
+  )
 
   const privateKey = await derivePrivateKey(credential.id, saltName, logger)
 
@@ -251,7 +247,7 @@ async function getExistingPasskey(
     }
   } catch (error) {
     logger.debug('No existing passkey found or user cancelled', {
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     })
     return null
   }
@@ -259,7 +255,7 @@ async function getExistingPasskey(
 
 // Create a new passkey credential with PRF extension
 async function createPasskey(
-  options: InternalPasskeyConfig, 
+  options: InternalPasskeyConfig,
   logger: Logger = consoleLogger
 ): Promise<PublicKeyCredential> {
   const challenge = generateSecureChallenge()
@@ -298,11 +294,9 @@ async function createPasskey(
 
   if (!credential) {
     logger.error('Failed to create passkey - credential is null')
-    throw new StintError(
-      'Failed to create passkey',
-      ErrorCodes.PASSKEY_CREATION_FAILED,
-      { reason: 'Credential creation returned null' }
-    )
+    throw new StintError('Failed to create passkey', ErrorCodes.PASSKEY_CREATION_FAILED, {
+      reason: 'Credential creation returned null',
+    })
   }
 
   // Add a small delay to handle potential race conditions
@@ -336,7 +330,7 @@ function base64urlToBytes(base64url: string): Uint8Array {
 
 // Get PRF output from passkey
 async function getPasskeyPRF(
-  credentialId: string, 
+  credentialId: string,
   salt: Uint8Array,
   logger: Logger = consoleLogger
 ): Promise<Uint8Array> {
@@ -380,11 +374,9 @@ async function getPasskeyPRF(
   const clientExtensionResults = assertion.getClientExtensionResults()
   if (!clientExtensionResults.prf?.results?.first) {
     logger.error('PRF extension not supported or no output')
-    throw new StintError(
-      'PRF extension not supported or no output',
-      ErrorCodes.PRF_NOT_SUPPORTED,
-      { suggestion: 'Your browser or authenticator may not support the PRF extension' }
-    )
+    throw new StintError('PRF extension not supported or no output', ErrorCodes.PRF_NOT_SUPPORTED, {
+      suggestion: 'Your browser or authenticator may not support the PRF extension',
+    })
   }
 
   // Handle different possible return types from PRF
