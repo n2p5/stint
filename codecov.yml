@@ -29,9 +29,9 @@ parsers:
 comment:
   layout: "reach,diff,flags,files,footer"
   behavior: default
-  require_changes: no
-  require_base: no
-  require_head: yes
+  require_changes: false
+  require_base: false
+  require_head: true
   show_carryforward_flags: false
 
 ignore:

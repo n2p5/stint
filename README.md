@@ -6,14 +6,14 @@
 Short-lived, non-custodial passkey based session signers for the Cosmos SDK ecosystem.
 
 > **⚠️ EXPERIMENTAL SOFTWARE WARNING**
-> 
+>
 > **This project is experimental and has NOT undergone a security audit.** Use at your own risk and only with funds you can afford to lose. Do not use in production environments or with significant amounts of cryptocurrency.
-> 
+>
 > - This software is provided "as is" without warranty of any kind
 > - No security audit has been conducted
 > - There may be undiscovered vulnerabilities
 > - Consider this alpha/beta software suitable for testing only
-> 
+>
 > Please review the code thoroughly before use and consider having it audited by security professionals before any production deployment.
 
 ## Overview
@@ -74,10 +74,10 @@ const hasAuthz = await sessionSigner.hasAuthzGrant()
 const hasFeegrant = await sessionSigner.hasFeegrant()
 
 // 3. Generate ready-to-broadcast delegation messages
-const authorizedRecipient = 'cosmos1recipient123...'
+const authorizedRecipient = 'atom1recipient123...'
 const setupMessages = sessionSigner.generateDelegationMessages({
   sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-  spendLimit: { denom: 'uatom', amount: '1000000' },   // 1 ATOM spending limit (can be uatom or uphoton)
+  spendLimit: { denom: 'uphoton', amount: '1000000' },   // 1 PHOTON spending limit (can be uatom or uphoton)
   gasLimit: { denom: 'uphoton', amount: '500000' },    // 0.5 PHOTON gas limit (must be uphoton in AtomOne)
   allowedRecipients: [authorizedRecipient] // Restrict to specific recipient only
 })
@@ -91,7 +91,7 @@ await primaryClient.signAndBroadcast(primaryAddress, setupMessages, 'auto')
 await sessionSigner.client.sendTokens(
   sessionSigner.primaryAddress(), // Funds come from primary signer
   authorizedRecipient, // Must match allowedRecipients from step 3
-  [{ denom: 'uatom', amount: '100000' }], // 0.1 ATOM
+  [{ denom: 'uphoton', amount: '100000' }], // 0.1 PHOTON
   'auto',
   'Sent via session signer'
 )
@@ -152,7 +152,7 @@ async function stintExample() {
   }
 
   // 5. Use session signer client to send funds on behalf of primary address
-  const sendAmount = [{ denom: 'uatom', amount: '500000' }] // 0.5 ATOM (within limits)
+  const sendAmount = [{ denom: 'uphoton', amount: '500000' }] // 0.5 PHOTON (within limits)
 
   console.log('Sending transaction via session signer...')
   
@@ -293,9 +293,12 @@ sequenceDiagram
 Creates a new session signer with passkey-based key derivation.
 
 ```typescript
+import { newSessionSigner, type Logger } from 'stint-signer'
+
 const sessionSigner = await newSessionSigner({
   primaryClient: SigningStargateClient,  // Required: Your primary address's client
-  saltName?: string                      // Optional: Salt for key derivation (default: 'stint-session')
+  saltName?: string,                     // Optional: Salt for key derivation (default: 'stint-session')
+  logger?: Logger                        // Optional: Custom logger (default: consoleLogger)
 })
 ```
 
@@ -305,9 +308,32 @@ Returns a `SessionSigner` object with these methods:
 - `primaryAddress()`: Get the primary signer address
 - `sessionAddress()`: Get the session signer address  
 - `generateDelegationMessages(config)`: Generate setup messages for authorization
+- `generateConditionalDelegationMessages(config)`: Generate messages only for missing grants
 - `hasAuthzGrant(messageType?)`: Check if authz grant exists
 - `hasFeegrant()`: Check if feegrant exists
 - `revokeDelegationMessages(msgTypeUrl?)`: Generate revocation messages (optional)
+
+### Available Exports
+
+```typescript
+// Main functions
+import { newSessionSigner } from 'stint-signer'
+
+// Error handling  
+import { StintError, ErrorCodes, type ErrorCode } from 'stint-signer'
+
+// Logging
+import { consoleLogger, noopLogger, type Logger } from 'stint-signer'
+
+// TypeScript types
+import type { 
+  SessionSigner, 
+  SessionSignerConfig, 
+  DelegationConfig,
+  AuthzGrantInfo,
+  FeegrantInfo
+} from 'stint-signer'
+```
 
 ### Session Signer Methods
 
@@ -331,6 +357,28 @@ await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
 - `spendLimit.denom`: Can be `'uatom'` (ATOM) or `'uphoton'` (PHOTON)
 - `gasLimit.denom`: Must be `'uphoton'` (PHOTON) - AtomOne requires fees in PHOTON
 - Default values use `'uphoton'` for both spend and gas limits
+
+#### `sessionSigner.generateConditionalDelegationMessages(config)`
+
+Similar to `generateDelegationMessages`, but only generates messages for grants that don't already exist. This is more efficient when you want to avoid duplicate grants.
+
+```typescript
+const messages = await sessionSigner.generateConditionalDelegationMessages({
+  sessionExpiration?: Date,              // When the grants expire
+  spendLimit?: { denom: string, amount: string },  // Max amount session signer can spend
+  gasLimit?: { denom: string, amount: string },    // Max gas fees covered by feegrant
+  allowedRecipients?: string[]           // Optional: restrict recipients
+})
+
+// messages will be empty if both grants already exist
+if (messages.length > 0) {
+  await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
+} else {
+  console.log('All grants already exist!')
+}
+```
+
+This method automatically checks for existing grants and only includes the missing ones in the returned message array.
 
 #### `sessionSigner.revokeDelegationMessages(msgTypeUrl?)`
 
@@ -370,31 +418,255 @@ const gamingSigner = await newSessionSigner({
 
 Each salt creates a completely different private key from the same passkey.
 
+## Extended Guide
+
+### Custom Logging
+
+Stint includes a comprehensive logging system to help you debug and monitor session signer operations. You can provide your own logger implementation or use the built-in options.
+
+#### Using Built-in Loggers
+
+```typescript
+import { newSessionSigner, consoleLogger, noopLogger } from 'stint-signer'
+
+// Default console logger (logs to console)
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger: consoleLogger  // Default if not specified
+})
+
+// No-op logger (discards all logs - useful for production)
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger: noopLogger
+})
+```
+
+#### Custom Logger Implementation
+
+```typescript
+import { newSessionSigner, type Logger } from 'stint-signer'
+
+// Implement your own logger
+const customLogger: Logger = {
+  debug: (message: string, context?: Record<string, unknown>) => {
+    // Send to your debugging service
+    debugService.log('debug', message, context)
+  },
+  info: (message: string, context?: Record<string, unknown>) => {
+    // Send to your analytics
+    analytics.track(message, context)
+  },
+  warn: (message: string, context?: Record<string, unknown>) => {
+    // Send to warning monitoring
+    warningService.report(message, context)
+  },
+  error: (message: string, error?: Error, context?: Record<string, unknown>) => {
+    // Send to error tracking (Sentry, etc.)
+    errorTracker.captureException(error || new Error(message), {
+      tags: { component: 'stint-signer' },
+      extra: context
+    })
+  }
+}
+
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger: customLogger
+})
+```
+
+#### What Gets Logged
+
+The logger captures important events throughout the session signer lifecycle:
+
+- **Session creation**: Passkey operations, key derivation progress
+- **Grant checking**: Network requests for existing authz/feegrant status
+- **Transaction operations**: Message generation and broadcasting
+- **Error conditions**: Network failures, validation errors, WebAuthn issues
+
+Example log output:
+```
+[Stint] Initializing session signer { saltName: 'my-app' }
+[Stint] Starting passkey derivation { address: 'cosmos1abc...', saltName: 'my-app' }  
+[Stint] Session key ready
+[Stint] Checking authz grant { messageType: '/cosmos.bank.v1beta1.MsgSend' }
+[Stint] Found authz grant { hasExpiration: true }
+```
+
+### Error Handling
+
+Stint provides structured error handling with specific error codes for different failure scenarios.
+
+#### Error Types
+
+```typescript
+import { StintError, ErrorCodes } from 'stint-signer'
+
+try {
+  const sessionSigner = await newSessionSigner({ primaryClient })
+} catch (error) {
+  if (error instanceof StintError) {
+    switch (error.code) {
+      case ErrorCodes.WEBAUTHN_NOT_SUPPORTED:
+        console.log('WebAuthn not available in this browser')
+        // Fallback to hardware wallet only
+        break
+        
+      case ErrorCodes.PASSKEY_CREATION_FAILED:
+        console.log('User cancelled passkey creation')
+        // Show user-friendly message
+        break
+        
+      case ErrorCodes.PRF_NOT_SUPPORTED:
+        console.log('Passkey does not support PRF extension')
+        // Inform user about browser/device limitations
+        break
+        
+      case ErrorCodes.USER_CANCELLED:
+        console.log('User cancelled the operation')
+        // No action needed
+        break
+        
+      case ErrorCodes.INVALID_RPC_URL:
+        console.log('Invalid RPC URL provided')
+        // Check your configuration
+        break
+        
+      default:
+        console.log('Unknown stint error:', error.message)
+    }
+    
+    // Access additional error details
+    console.log('Error details:', error.details)
+  } else {
+    // Handle other errors
+    console.error('Unexpected error:', error)
+  }
+}
+```
+
+#### Complete Error Code Reference
+
+| Error Code | Description | Common Causes |
+|------------|-------------|---------------|
+| `WEBAUTHN_NOT_SUPPORTED` | WebAuthn API not available | Older browser, non-HTTPS context |
+| `PASSKEY_CREATION_FAILED` | Failed to create passkey | User cancellation, hardware limitations |
+| `PASSKEY_AUTHENTICATION_FAILED` | Failed to authenticate passkey | User cancellation, wrong passkey |
+| `PRF_NOT_SUPPORTED` | Passkey PRF extension not supported | Older browser, hardware limitations |
+| `USER_CANCELLED` | User cancelled operation | User action |
+| `CLIENT_INITIALIZATION_FAILED` | Failed to create signing client | Network issues, invalid configuration |
+| `SIGNER_EXTRACTION_FAILED` | Could not extract signer from client | Invalid client configuration |
+| `RPC_URL_EXTRACTION_FAILED` | Could not get RPC URL from client | Client configuration issue |
+| `GRANT_CHECK_FAILED` | Failed to check existing grants | Network issues, invalid endpoints |
+| `INVALID_RESPONSE` | Unexpected API response format | Network issues, API changes |
+| `INVALID_ADDRESS` | Invalid Cosmos address format | Configuration error |
+| `INVALID_AMOUNT` | Invalid token amount | Input validation error |
+| `INVALID_DENOMINATION` | Invalid token denomination | Configuration error |
+| `INVALID_RPC_URL` | Invalid or malformed RPC URL | Security validation, configuration error |
+
+#### Network Request Security
+
+Stint includes built-in security measures for network requests:
+
+- **Request timeouts**: 10-second timeout on all fetch operations
+- **Response size limits**: 1MB maximum response size to prevent DoS
+- **Content-type validation**: Only accepts `application/json` responses
+- **URL validation**: Prevents injection attacks with secure URL parsing
+- **No redirects**: Prevents redirect-based attacks
+
+```typescript
+// Network errors are handled gracefully
+try {
+  const hasGrant = await sessionSigner.hasAuthzGrant()
+} catch (error) {
+  // Network failures return null rather than throwing
+  console.log('Grant check failed, assuming no grant exists')
+}
+```
+
+### Advanced Configuration
+
+#### Custom Salt Names for Isolation
+
+Use different salt names to create completely isolated session signers:
+
+```typescript
+// Production app
+const prodSigner = await newSessionSigner({
+  primaryClient,
+  saltName: 'myapp-prod'
+})
+
+// Staging/testing  
+const testSigner = await newSessionSigner({
+  primaryClient,
+  saltName: 'myapp-test'
+})
+
+// Feature-specific isolation
+const tradingSigner = await newSessionSigner({
+  primaryClient,
+  saltName: 'myapp-trading'
+})
+```
+
+#### Conditional Authorization
+
+Only create grants that don't already exist:
+
+```typescript
+// Check existing grants first
+const [hasAuthz, hasFeegrant] = await Promise.all([
+  sessionSigner.hasAuthzGrant(),
+  sessionSigner.hasFeegrant()
+])
+
+if (!hasAuthz || !hasFeegrant) {
+  // Only create missing grants
+  const messages = sessionSigner.generateConditionalDelegationMessages({
+    sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    spendLimit: { denom: 'uphoton', amount: '1000000' },
+    gasLimit: { denom: 'uphoton', amount: '500000' },
+    allowedRecipients: ['cosmos1specific...']
+  })
+  
+  if (messages.length > 0) {
+    await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
+  }
+}
+```
+
 ## Risks
 
 When using session signers, be aware of these potential risks:
 
 ### High Spending Limits Without Recipient Restrictions
+
 - **Risk**: Setting high `spendLimit` values without specifying `allowedRecipients` allows the session signer to send funds to ANY address
 - **Impact**: If the session key is compromised, an attacker could drain funds up to the spending limit
 - **Mitigation**: Always use `allowedRecipients` to restrict destinations, or keep spending limits minimal
 
 ### Excessive Fee Allowances
+
 - **Risk**: Setting very high `gasLimit` values can allow a compromised session signer to waste funds on transaction fees
 - **Impact**: Malicious or buggy code could burn through your fee allowance unnecessarily
 - **Mitigation**: Set reasonable gas limits based on expected usage patterns
 
 ### Long Expiration Times
+
 - **Risk**: Setting `sessionExpiration` far in the future increases the window of opportunity for attacks
 - **Impact**: A compromised key remains dangerous for longer periods
 - **Mitigation**: Use short expiration times (hours or days, not months) and renew as needed
 
 ### Passkey Compromise
+
 - **Risk**: If your device or passkey is compromised, the attacker can recreate your session signer
 - **Impact**: They gain the same permissions you granted to the session signer
 - **Mitigation**: Revoke session signers immediately if device security is compromised
 
 ### Application-Level Vulnerabilities
+
 - **Risk**: XSS, CSRF, or other web vulnerabilities could allow attackers to use your session signer
 - **Impact**: Unauthorized transactions within your granted permissions
 - **Mitigation**: Follow web security best practices and audit your application code

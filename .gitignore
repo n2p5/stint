@@ -136,6 +136,9 @@ dist
 .pnp.*
 
 
+# SvelteKit build output
+.svelte-kit/
+
 # omit LLMs
 .claude/
 CLAUDE.md

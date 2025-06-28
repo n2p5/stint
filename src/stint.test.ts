@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { dateToTimestamp, newSessionSigner } from './stint'
+import { dateToTimestamp, newSessionSigner, convertRpcToRestUrl } from './stint'
 import { DirectSecp256k1Wallet } from '@cosmjs/proto-signing'
 import { SigningStargateClient } from '@cosmjs/stargate'
 import type { SessionSigner, DelegationConfig } from './types'
+import { StintError, ErrorCodes } from './errors'
 
 // Mock the passkey module
 vi.mock('./passkey', () => ({
@@ -51,6 +52,88 @@ describe('dateToTimestamp', () => {
       const timestamp = dateToTimestamp(input)
       expect(timestamp.seconds).toBe(expectedSeconds)
       expect(timestamp.nanos).toBe(expectedNanos)
+    })
+  })
+})
+
+describe('convertRpcToRestUrl', () => {
+  // Table-driven tests for URL conversion security
+  const validTestCases = [
+    {
+      name: 'standard RPC URL with port',
+      input: 'https://rpc.cosmos.directory:26657',
+      expected: 'https://api.cosmos.directory:1317'
+    },
+    {
+      name: 'HTTP RPC URL',
+      input: 'http://localhost:26657',
+      expected: 'http://localhost:1317'
+    },
+    {
+      name: 'RPC URL without port',
+      input: 'https://rpc.cosmos.directory',
+      expected: 'https://api.cosmos.directory'
+    },
+    {
+      name: 'URL without RPC subdomain',
+      input: 'https://cosmos.directory:26657',
+      expected: 'https://cosmos.directory:1317'
+    },
+    {
+      name: 'URL with path',
+      input: 'https://rpc.cosmos.directory:26657/some/path',
+      expected: 'https://api.cosmos.directory:1317/some/path'
+    },
+    {
+      name: 'AtomOne testnet pattern',
+      input: 'https://atomone-testnet-1-rpc.allinbits.services',
+      expected: 'https://atomone-testnet-1-api.allinbits.services'
+    }
+  ]
+
+  const invalidTestCases = [
+    {
+      name: 'invalid protocol (ftp)',
+      input: 'ftp://rpc.cosmos.directory:26657',
+      expectedError: 'Invalid RPC URL provided'
+    },
+    {
+      name: 'invalid protocol (javascript)',
+      input: 'javascript:alert(1)',
+      expectedError: 'Invalid RPC URL provided'
+    },
+    {
+      name: 'malformed URL',
+      input: 'not-a-url',
+      expectedError: 'Invalid RPC URL provided'
+    },
+    {
+      name: 'empty string',
+      input: '',
+      expectedError: 'Invalid RPC URL provided'
+    }
+  ]
+
+  validTestCases.forEach(({ name, input, expected }) => {
+    it(`should handle ${name}`, () => {
+      const result = convertRpcToRestUrl(input)
+      expect(result).toBe(expected)
+    })
+  })
+
+  invalidTestCases.forEach(({ name, input, expectedError }) => {
+    it(`should reject ${name}`, () => {
+      expect(() => convertRpcToRestUrl(input)).toThrow(StintError)
+      expect(() => convertRpcToRestUrl(input)).toThrow(expectedError)
+      
+      try {
+        convertRpcToRestUrl(input)
+      } catch (error) {
+        expect(error).toBeInstanceOf(StintError)
+        if (error instanceof StintError) {
+          expect(error.code).toBe(ErrorCodes.INVALID_RPC_URL)
+        }
+      }
     })
   })
 })
@@ -187,6 +270,83 @@ describe('SessionSigner methods', () => {
       )
     })
 
+    // Table-driven tests for conditional delegation messages
+    describe('generateConditionalDelegationMessages', () => {
+      it('should generate both messages when neither grant exists', async () => {
+        const result = await signer.generateConditionalDelegationMessages({
+          sessionExpiration: new Date(Date.now() + 3600000),
+          spendLimit: { denom: 'uphoton', amount: '5000000' },
+          gasLimit: { denom: 'uphoton', amount: '2000000' },
+        })
+
+        expect(result.length).toBe(2)
+        expect(result[0].typeUrl).toBe('/cosmos.authz.v1beta1.MsgGrant')
+        expect(result[1].typeUrl).toBe('/cosmos.feegrant.v1beta1.MsgGrantAllowance')
+      })
+
+      it('should generate only authz when feegrant exists', async () => {
+        // Mock feegrant exists but authz doesn't
+        global.fetch = vi.fn()
+          .mockResolvedValueOnce({
+            ok: false,
+            status: 404,
+            json: async () => ({ grants: [] })
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ allowance: { spendLimit: [{ denom: 'uphoton', amount: '1000000' }] } })
+          })
+
+        const result = await signer.generateConditionalDelegationMessages({
+          spendLimit: { denom: 'uphoton', amount: '5000000' },
+        })
+
+        expect(result.length).toBe(1)
+        expect(result[0].typeUrl).toBe('/cosmos.authz.v1beta1.MsgGrant')
+      })
+
+      it('should generate only feegrant when authz exists', async () => {
+        // Mock authz exists but feegrant doesn't
+        global.fetch = vi.fn()
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+          })
+          .mockResolvedValueOnce({
+            ok: false,
+            status: 404,
+            json: async () => ({})
+          })
+
+        const result = await signer.generateConditionalDelegationMessages({
+          gasLimit: { denom: 'uphoton', amount: '2000000' },
+        })
+
+        expect(result.length).toBe(1)
+        expect(result[0].typeUrl).toBe('/cosmos.feegrant.v1beta1.MsgGrantAllowance')
+      })
+
+      it('should generate no messages when both grants exist', async () => {
+        // Mock both grants exist
+        global.fetch = vi.fn()
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({ allowance: { spendLimit: [{ denom: 'uphoton', amount: '1000000' }] } })
+          })
+
+        const result = await signer.generateConditionalDelegationMessages({
+          spendLimit: { denom: 'uphoton', amount: '5000000' },
+          gasLimit: { denom: 'uphoton', amount: '2000000' },
+        })
+
+        expect(result.length).toBe(0)
+      })
+    })
+
     // Table-driven tests for AtomOne denomination scenarios
     describe('AtomOne denomination support', () => {
       const atomOneTestCases = [
@@ -317,6 +477,40 @@ describe('SessionSigner methods', () => {
       vi.clearAllMocks()
     })
 
+    it('should handle response size validation for authz', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: {
+          get: vi.fn().mockImplementation((header: string) => {
+            if (header === 'content-length') return '2000000' // 2MB - too large
+            if (header === 'content-type') return 'application/json'
+            return null
+          })
+        },
+        json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+      })
+
+      const result = await signer.hasAuthzGrant()
+      expect(result).toBeNull()
+    })
+
+    it('should handle invalid content type for authz', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: {
+          get: vi.fn().mockImplementation((header: string) => {
+            if (header === 'content-length') return '1000'
+            if (header === 'content-type') return 'text/plain' // Wrong content type
+            return null
+          })
+        },
+        json: async () => ({ grants: [{ authorization: {}, expiration: null }] })
+      })
+
+      const result = await signer.hasAuthzGrant()
+      expect(result).toBeNull()
+    })
+
     // Table-driven tests for hasAuthzGrant
     const authzTestCases = [
       {
@@ -405,7 +599,15 @@ describe('SessionSigner methods', () => {
       await signer.hasAuthzGrant('/cosmos.staking.v1beta1.MsgDelegate')
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('msg_type_url=/cosmos.staking.v1beta1.MsgDelegate')
+        expect.stringContaining('msg_type_url=/cosmos.staking.v1beta1.MsgDelegate'),
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Accept': 'application/json',
+            'User-Agent': 'stint-library/1.0.0'
+          }),
+          redirect: 'error'
+        })
       )
     })
   })
@@ -413,6 +615,40 @@ describe('SessionSigner methods', () => {
   describe('hasFeegrant', () => {
     beforeEach(() => {
       vi.clearAllMocks()
+    })
+
+    it('should handle response size validation', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: {
+          get: vi.fn().mockImplementation((header: string) => {
+            if (header === 'content-length') return '2000000' // 2MB - too large
+            if (header === 'content-type') return 'application/json'
+            return null
+          })
+        },
+        json: async () => ({ allowance: { test: 'data' } })
+      })
+
+      const result = await signer.hasFeegrant()
+      expect(result).toBeNull()
+    })
+
+    it('should handle invalid content type', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: {
+          get: vi.fn().mockImplementation((header: string) => {
+            if (header === 'content-length') return '1000'
+            if (header === 'content-type') return 'text/html' // Wrong content type
+            return null
+          })
+        },
+        json: async () => ({ allowance: { test: 'data' } })
+      })
+
+      const result = await signer.hasFeegrant()
+      expect(result).toBeNull()
     })
 
     // Table-driven tests for hasFeegrant
