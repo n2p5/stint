@@ -1,6 +1,7 @@
 # Stint
 
-[![codecov](https://codecov.io/gh/n2p5/stint/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/n2p5/stint)
+[![codecov](https://codecov.io/gh/n2p5/stint/graph/badge.svg)](https://codecov.io/gh/n2p5/stint)
+[![Known Vulnerabilities](https://snyk.io/test/github/n2p5/stint/badge.svg)](https://snyk.io/test/github/n2p5/stint)
 
 Short-lived, non-custodial passkey based session signers for the Cosmos SDK ecosystem.
 
