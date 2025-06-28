@@ -115,7 +115,7 @@ describe('passkey utilities', () => {
           expect.objectContaining({
             publicKey: expect.objectContaining({
               user: expect.objectContaining({
-                displayName: 'Stint: atone1ver...',
+                displayName: 'Stint: atone1very...',
               }),
             }),
           })
