@@ -1,18 +1,28 @@
 <script lang="ts">
   import { sessionStore } from '$lib/stores/session';
-  import { newSessionSigner } from 'stint-signer';
+  import { newSessionSigner, StintError, ErrorCodes } from 'stint-signer';
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
+  import { createUILogger } from '$lib/logger';
   
   let isCreating = false;
   let error = '';
+  let status = '';
+  
+  // Create a logger that updates the UI status
+  const logger = createUILogger((newStatus: string) => {
+    status = newStatus;
+  });
   
   async function createSession() {
     isCreating = true;
     error = '';
+    status = '';
     
     try {
       if (!$sessionStore.signer) throw new Error('No wallet connected');
+      
+      logger.info('Initializing primary client...');
       
       // Create primary client
       const primaryClient = await SigningStargateClient.connectWithSigner(
@@ -23,18 +33,52 @@
         }
       );
       
-      // Create session signer
+      logger.info('Creating session signer with passkey...');
+      
+      // Create session signer with logger
       const sessionSigner = await newSessionSigner({
         primaryClient,
-        saltName: 'stint-session'
+        saltName: 'stint-session',
+        logger
       });
+      
+      logger.info('Session signer created successfully!');
       
       sessionStore.update(state => ({
         ...state,
         sessionSigner
       }));
+      
+      status = ''; // Clear status on success
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to create session signer';
+      if (err instanceof StintError) {
+        logger.error(`Stint operation failed: ${err.message}`, err, { 
+          code: err.code, 
+          details: err.details 
+        });
+        
+        // Provide user-friendly error messages based on error code
+        switch (err.code) {
+          case ErrorCodes.WEBAUTHN_NOT_SUPPORTED:
+            error = 'Your browser does not support WebAuthn. Please use a modern browser like Chrome, Firefox, or Safari.';
+            break;
+          case ErrorCodes.USER_CANCELLED:
+            error = 'Passkey operation was cancelled. Please try again and complete the passkey prompt.';
+            break;
+          case ErrorCodes.PRF_NOT_SUPPORTED:
+            error = 'Your browser or authenticator does not support the required PRF extension. Please try a different browser or authenticator.';
+            break;
+          case ErrorCodes.PASSKEY_CREATION_FAILED:
+          case ErrorCodes.PASSKEY_AUTHENTICATION_FAILED:
+            error = 'Failed to create or authenticate with passkey. Please try again.';
+            break;
+          default:
+            error = `Session signer creation failed: ${err.message}`;
+        }
+      } else {
+        logger.error('Unexpected error during session creation', err instanceof Error ? err : undefined);
+        error = err instanceof Error ? err.message : 'Failed to create session signer';
+      }
     } finally {
       isCreating = false;
     }
@@ -85,6 +129,15 @@
       <p class="text-base-content/70">
         Create a session signer using a Passkey. This signer will be able to transact on behalf of your primary address.
       </p>
+      
+      {#if status}
+        <div class="alert alert-info">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>{status}</span>
+        </div>
+      {/if}
       
       {#if error}
         <div class="alert alert-error">

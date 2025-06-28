@@ -25,14 +25,14 @@ describe('type exports', () => {
       sessionExpiration: new Date(),
       spendLimit: { denom: 'uatom', amount: '1000' },
       gasLimit: { denom: 'uatom', amount: '500' },
-      allowedRecipients: ['cosmos1...'],
+      allowedRecipients: ['atone1...'],
     }
 
     const delegationConfig: DelegationConfig = {
       sessionExpiration: new Date(),
       spendLimit: { denom: 'uatom', amount: '1000' },
       gasLimit: { denom: 'uatom', amount: '500' },
-      allowedRecipients: ['cosmos1...'],
+      allowedRecipients: ['atone1...'],
     }
 
     const sessionSignerConfig: SessionSignerConfig = {

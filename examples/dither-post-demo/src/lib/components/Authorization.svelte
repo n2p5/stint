@@ -3,6 +3,8 @@
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
   import { DITHER_ADDRESS } from '$lib/constants';
+  import { exampleLogger } from '$lib/logger';
+  import { createTxLink, type TxLinkData } from '$lib/utils/explorer';
   
   let isChecking = false;
   let isAuthorizing = false;
@@ -10,8 +12,8 @@
   let hasAuthzGrant = false;
   let hasFeegrant = false;
   let error = '';
-  let successTx = '';
-  let revokeTx = '';
+  let successTx: TxLinkData | null = null;
+  let revokeTx: TxLinkData | null = null;
   
   // Reactive check when session signer changes
   $: if ($sessionStore.sessionSigner) {
@@ -22,6 +24,8 @@
     if (!$sessionStore.sessionSigner) return;
     
     isChecking = true;
+    exampleLogger.info('Checking authorization status...');
+    
     try {
       const [authz, feegrant] = await Promise.all([
         $sessionStore.sessionSigner.hasAuthzGrant(),
@@ -31,8 +35,18 @@
       hasAuthzGrant = !!authz;
       hasFeegrant = !!feegrant;
       
+      exampleLogger.info('Authorization check completed', { 
+        hasAuthzGrant, 
+        hasFeegrant,
+        authzExpiration: authz?.expiration?.toISOString(),
+        feegrantExpiration: feegrant?.expiration?.toISOString()
+      });
+      
     } catch (err) {
-      // Error checking authorizations
+      exampleLogger.warn('Failed to check authorizations', { 
+        error: err instanceof Error ? err.message : 'Unknown error' 
+      });
+      // Don't show error to user as this is non-critical
     } finally {
       isChecking = false;
     }
@@ -43,10 +57,13 @@
     
     isAuthorizing = true;
     error = '';
-    successTx = '';
-    revokeTx = '';
+    successTx = null;
+    revokeTx = null;
+    
+    exampleLogger.info('Starting authorization creation...');
     
     try {
+      exampleLogger.debug('Creating primary client...');
       // Check primary wallet balance
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
@@ -57,11 +74,25 @@
       );
       
       const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
+      
+      exampleLogger.debug('Checking balance...', { primaryAddress });
       const photonBalance = await primaryClient.getBalance(primaryAddress, 'uphoton');
+      
+      exampleLogger.info('Balance check completed', { 
+        balance: photonBalance.amount,
+        denom: photonBalance.denom 
+      });
       
       if (parseInt(photonBalance.amount) < 2000000) {
         throw new Error(`Insufficient PHOTON balance. You have ${photonBalance.amount} uphoton but need at least 2,000,000 uphoton (2 PHOTON).`);
       }
+      
+      exampleLogger.debug('Generating delegation messages...', {
+        spendLimit: '1000000 uphoton',
+        gasLimit: '1000000 uphoton',
+        recipient: DITHER_ADDRESS
+      });
+      
       // Generate delegation messages with Dither testnet as authorized recipient
       const messages = $sessionStore.sessionSigner.generateDelegationMessages({
         sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
@@ -69,6 +100,8 @@
         gasLimit: { denom: 'uphoton', amount: '1000000' }, // 1 PHOTON gas
         allowedRecipients: [DITHER_ADDRESS] // Dither testnet
       });
+      
+      exampleLogger.info('Broadcasting authorization transaction...');
       
       // Broadcast transaction (reuse the primaryClient and primaryAddress from above)
       const result = await primaryClient.signAndBroadcast(
@@ -79,14 +112,26 @@
       );
       
       if (result.code !== 0) {
+        exampleLogger.error('Transaction failed', undefined, { 
+          code: result.code, 
+          rawLog: result.rawLog 
+        });
         throw new Error(`Transaction failed: ${result.rawLog}`);
       }
       
-      successTx = result.transactionHash;
+      successTx = createTxLink(result.transactionHash);
+      exampleLogger.info('Authorization transaction successful!', { 
+        transactionHash: result.transactionHash,
+        gasUsed: result.gasUsed,
+        gasWanted: result.gasWanted
+      });
       
       // Recheck authorizations
       await checkAuthorizations();
     } catch (err) {
+      exampleLogger.error('Failed to create authorizations', err instanceof Error ? err : undefined, {
+        operation: 'createAuthorizations'
+      });
       error = err instanceof Error ? err.message : 'Failed to create authorizations';
     } finally {
       isAuthorizing = false;
@@ -98,13 +143,17 @@
     
     isRevoking = true;
     error = '';
-    successTx = '';
-    revokeTx = '';
+    successTx = null;
+    revokeTx = null;
+    
+    exampleLogger.info('Starting authorization revocation...');
     
     try {
+      exampleLogger.debug('Generating revocation messages...');
       // Generate revocation messages
       const messages = $sessionStore.sessionSigner.revokeDelegationMessages();
       
+      exampleLogger.debug('Creating primary client for revocation...');
       // Create primary client for broadcasting
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
@@ -114,6 +163,7 @@
         }
       );
       
+      exampleLogger.info('Broadcasting revocation transaction...');
       // Broadcast transaction
       const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       const result = await primaryClient.signAndBroadcast(
@@ -124,14 +174,26 @@
       );
       
       if (result.code !== 0) {
+        exampleLogger.error('Revocation transaction failed', undefined, { 
+          code: result.code, 
+          rawLog: result.rawLog 
+        });
         throw new Error(`Transaction failed: ${result.rawLog}`);
       }
       
-      revokeTx = result.transactionHash;
+      revokeTx = createTxLink(result.transactionHash);
+      exampleLogger.info('Revocation transaction successful!', { 
+        transactionHash: result.transactionHash,
+        gasUsed: result.gasUsed,
+        gasWanted: result.gasWanted
+      });
       
       // Recheck authorizations
       await checkAuthorizations();
     } catch (err) {
+      exampleLogger.error('Failed to revoke authorizations', err instanceof Error ? err : undefined, {
+        operation: 'revokeAuthorizations'
+      });
       error = err instanceof Error ? err.message : 'Failed to revoke authorizations';
     } finally {
       isRevoking = false;
@@ -184,7 +246,21 @@
               </svg>
               <div>
                 <h3 class="font-bold">Authorization created!</h3>
-                <div class="text-xs">Tx: {successTx.slice(0, 16)}...</div>
+                <div class="text-xs">
+                  <span>Tx: </span>
+                  <a 
+                    href={successTx.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    class="link link-primary hover:link-accent"
+                    title="View transaction on AtomOne Testnet Explorer"
+                  >
+                    {successTx.displayText}
+                  </a>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </div>
               </div>
             </div>
           {/if}
@@ -196,7 +272,21 @@
               </svg>
               <div>
                 <h3 class="font-bold">Authorization revoked!</h3>
-                <div class="text-xs">Tx: {revokeTx.slice(0, 16)}...</div>
+                <div class="text-xs">
+                  <span>Tx: </span>
+                  <a 
+                    href={revokeTx.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    class="link link-primary hover:link-accent"
+                    title="View transaction on AtomOne Testnet Explorer"
+                  >
+                    {revokeTx.displayText}
+                  </a>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </div>
               </div>
             </div>
           {/if}
@@ -206,7 +296,24 @@
               <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>{error}</span>
+              <div>
+                <span>{error}</span>
+                {#if error.includes('Insufficient PHOTON balance')}
+                  <div class="mt-2">
+                    <a 
+                      href="https://testnet.explorer.allinbits.services/atomone-testnet-1/faucet" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      class="btn btn-sm btn-outline btn-primary"
+                    >
+                      Get PHOTON from Faucet
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
+                {/if}
+              </div>
             </div>
           {/if}
           

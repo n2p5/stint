@@ -2,28 +2,37 @@
   import { sessionStore } from '$lib/stores/session';
   import { onMount } from 'svelte';
   import { DITHER_ADDRESS, DEFAULT_AMOUNT, DEFAULT_MEMO } from '$lib/constants';
+  import { exampleLogger } from '$lib/logger';
+  import { createTxLink, type TxLinkData } from '$lib/utils/explorer';
   
   let recipient = DITHER_ADDRESS;
   let amount = DEFAULT_AMOUNT;
   let memo = DEFAULT_MEMO;
   let isSending = false;
   let error = '';
-  let successTx = '';
+  let successTx: TxLinkData | null = null;
   let cosmosModules: any = null;
   
   onMount(async () => {
-    // Load cosmos modules
-    const [bankModule, authzModule, anyModule] = await Promise.all([
-      import('cosmjs-types/cosmos/bank/v1beta1/tx'),
-      import('cosmjs-types/cosmos/authz/v1beta1/tx'),
-      import('cosmjs-types/google/protobuf/any')
-    ]);
-    
-    cosmosModules = {
-      MsgSend: bankModule.MsgSend,
-      MsgExec: authzModule.MsgExec,
-      Any: anyModule.Any
-    };
+    exampleLogger.debug('Loading cosmos modules...');
+    try {
+      // Load cosmos modules
+      const [bankModule, authzModule, anyModule] = await Promise.all([
+        import('cosmjs-types/cosmos/bank/v1beta1/tx'),
+        import('cosmjs-types/cosmos/authz/v1beta1/tx'),
+        import('cosmjs-types/google/protobuf/any')
+      ]);
+      
+      cosmosModules = {
+        MsgSend: bankModule.MsgSend,
+        MsgExec: authzModule.MsgExec,
+        Any: anyModule.Any
+      };
+      
+      exampleLogger.debug('Cosmos modules loaded successfully');
+    } catch (err) {
+      exampleLogger.error('Failed to load cosmos modules', err instanceof Error ? err : undefined);
+    }
   });
   
   $: canSend = $sessionStore.sessionSigner && recipient && amount && Number(amount) > 0 && cosmosModules;
@@ -33,7 +42,13 @@
     
     isSending = true;
     error = '';
-    successTx = '';
+    successTx = null;
+    
+    exampleLogger.info('Starting transaction preparation...', {
+      recipient,
+      amount,
+      memo: memo.slice(0, 50) + (memo.length > 50 ? '...' : '')
+    });
     
     try {
       // Validate recipient address
@@ -50,6 +65,12 @@
       const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       const sessionAddress = $sessionStore.sessionSigner.sessionAddress();
       
+      exampleLogger.debug('Creating MsgSend message...', {
+        fromAddress: primaryAddress,
+        toAddress: recipient,
+        amount: amountNum
+      });
+      
       // Create MsgSend message
       const msgSend = cosmosModules.MsgSend.fromPartial({
         fromAddress: primaryAddress,
@@ -57,11 +78,17 @@
         amount: [{ denom: 'uphoton', amount: String(amount) }]
       });
       
+      exampleLogger.debug('Encoding MsgSend...');
       // Encode the MsgSend
       const msgSendBytes = cosmosModules.MsgSend.encode(msgSend).finish();
       const msgSendAny = cosmosModules.Any.fromPartial({
         typeUrl: '/cosmos.bank.v1beta1.MsgSend',
         value: msgSendBytes
+      });
+      
+      exampleLogger.debug('Creating MsgExec wrapper...', {
+        grantee: sessionAddress,
+        msgType: '/cosmos.bank.v1beta1.MsgSend'
       });
       
       // Create MsgExec message
@@ -80,6 +107,12 @@
         granter: primaryAddress, // This tells the chain to use the feegrant!
       };
       
+      exampleLogger.info('Broadcasting transaction...', {
+        signer: sessionAddress,
+        feeGranter: primaryAddress,
+        gasLimit: fee.gas,
+        feeAmount: fee.amount
+      });
       
       const result = await $sessionStore.sessionSigner.client.signAndBroadcast(
         sessionAddress,
@@ -89,16 +122,33 @@
       );
       
       if (result.code !== 0) {
+        exampleLogger.error('Transaction failed on chain', undefined, { 
+          code: result.code, 
+          rawLog: result.rawLog 
+        });
         throw new Error(`Transaction failed: ${result.rawLog}`);
       }
       
-      successTx = result.transactionHash;
+      successTx = createTxLink(result.transactionHash);
+      
+      exampleLogger.info('Transaction successful!', {
+        transactionHash: result.transactionHash,
+        gasUsed: result.gasUsed,
+        gasWanted: result.gasWanted,
+        height: result.height,
+        events: result.events?.length || 0
+      });
       
       // Reset form on success
       recipient = DITHER_ADDRESS;
       amount = DEFAULT_AMOUNT;
       memo = DEFAULT_MEMO;
     } catch (err) {
+      exampleLogger.error('Transaction failed', err instanceof Error ? err : undefined, {
+        operation: 'sendTransaction',
+        recipient,
+        amount
+      });
       error = err instanceof Error ? err.message : 'Failed to send transaction';
     } finally {
       isSending = false;
@@ -119,7 +169,21 @@
             </svg>
             <div>
               <h3 class="font-bold">Transaction sent!</h3>
-              <div class="text-xs">Tx: {successTx}</div>
+              <div class="text-xs">
+                <span>Tx: </span>
+                <a 
+                  href={successTx.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="link link-primary hover:link-accent"
+                  title="View transaction on AtomOne Testnet Explorer"
+                >
+                  {successTx.displayText}
+                </a>
+                <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </div>
             </div>
           </div>
         {/if}
