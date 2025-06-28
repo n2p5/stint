@@ -22,7 +22,7 @@ describe('passkey utilities', () => {
         value: { hostname: 'localhost' },
         writable: true,
       })
-      
+
       // This should not throw - already tested in other tests
       expect(window.location.hostname).toBe('localhost')
     })
@@ -32,7 +32,7 @@ describe('passkey utilities', () => {
         value: { hostname: '127.0.0.1' },
         writable: true,
       })
-      
+
       expect(window.location.hostname).toBe('127.0.0.1')
     })
   })
@@ -197,14 +197,14 @@ describe('passkey utilities', () => {
     it('should handle base64url decoding with padding', () => {
       // Test base64urlToBytes indirectly through credential ID handling
       const testCredentialId = 'dGVzdC1jcmVkZW50aWFs' // "test-credential" in base64url
-      
+
       // This tests the internal base64urlToBytes function
       expect(testCredentialId).toMatch(/^[A-Za-z0-9_-]+$/)
     })
 
     it('should handle base64url without padding', () => {
       const testCredentialId = 'dGVzdA' // "test" in base64url without padding
-      
+
       expect(testCredentialId).toMatch(/^[A-Za-z0-9_-]+$/)
     })
   })
@@ -229,7 +229,7 @@ describe('passkey utilities', () => {
 
       // Mock timeout error on first attempt
       mockWebAuthn.mockGet.mockRejectedValueOnce(
-        new DOMException('Operation timed out', 'TimeoutError')
+        new globalThis.DOMException('Operation timed out', 'TimeoutError')
       )
 
       // Should create new passkey when existing one times out
