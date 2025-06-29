@@ -67,7 +67,7 @@ import { SigningStargateClient } from '@cosmjs/stargate'
 // 1. Create session signer
 const sessionSigner = await newSessionSigner({
   primaryClient,  // Your existing SigningStargateClient
-  saltName: 'my-app' // optional, defaults to 'stint-session'
+  saltName: 'my-app' // Optional: defaults to 'stint-session'
 })
 
 // 2. Check existing grants (optional)
@@ -423,14 +423,14 @@ Each salt creates a completely different private key from the same passkey.
 
 ### Custom Logging
 
-Stint includes a comprehensive logging system to help you debug and monitor session signer operations. You can provide your own logger implementation or use the built-in options.
+Stint includes a comprehensive logging system to help you debug and monitor session signer operations. By default, the library runs silently with no logging output, making it production-ready out of the box. You can enable logging by providing a logger implementation.
 
 #### Using Built-in Loggers
 
 ```typescript
 import { newSessionSigner, consoleLogger } from 'stint-signer'
 
-// Default behavior - no logging
+// Default behavior - no logging (production-ready)
 const sessionSigner = await newSessionSigner({
   primaryClient
 })
@@ -439,6 +439,12 @@ const sessionSigner = await newSessionSigner({
 const sessionSigner = await newSessionSigner({
   primaryClient,
   logger: consoleLogger
+})
+
+// Conditional logging based on environment
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger: process.env.NODE_ENV === 'development' ? consoleLogger : undefined
 })
 ```
 
