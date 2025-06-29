@@ -40,7 +40,7 @@
   "license": "Unlicense",
   "repository": {
     "type": "git",
-    "url": "https://github.com/n2p5/stint.git"
+    "url": "git+https://github.com/n2p5/stint.git"
   },
   "packageManager": "pnpm@10.12.4",
   "devDependencies": {
