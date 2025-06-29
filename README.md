@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/n2p5/stint/graph/badge.svg)](https://codecov.io/gh/n2p5/stint)
 [![Known Vulnerabilities](https://snyk.io/test/github/n2p5/stint/badge.svg)](https://snyk.io/test/github/n2p5/stint)
 
-Short-lived, non-custodial passkey based session signers for the Cosmos SDK ecosystem.
+Short-lived, non-custodial, zero-balance passkey based session signers for the Cosmos SDK ecosystem.
 
 > **⚠️ EXPERIMENTAL SOFTWARE WARNING**
 >
@@ -20,6 +20,15 @@ Short-lived, non-custodial passkey based session signers for the Cosmos SDK ecos
 ## Overview
 
 Stint enables users to create ephemeral session signers that can perform limited blockchain actions without requiring constant hardware wallet interaction. The system uses Cosmos SDK's `authz` and `feegrant` modules combined with WebAuthn Passkeys for secure, deterministic key derivation.
+
+## Features
+
+- 🔑 **Passkey-based key derivation** - Uses WebAuthn PRF extension for deterministic, secure key generation
+- 🔐 **Non-custodial** - Session signer's private key is derived from the Passkey PRF, and never leaves the client.
+- ⚡ **Seamless UX** - Sign transactions without hardware wallet popups for authorized actions  
+- 🚀 **Zero balance required** - Session signer works without any token balance
+- 🌐 **Multi-wallet support** - Works with Keplr, Leap, Cosmostation, and potentially any Cosmos wallet
+- 📦 **Framework agnostic** - Works in browsers and React Native environments
 
 ## Why would I want this?
 
@@ -38,15 +47,6 @@ The system works by creating a **session signer** that never holds funds but can
 1. **Passkey + PRF**: Creates a deterministic private key using WebAuthn Passkey with PRF extension
 2. **Authz Grant**: Primary signer authorizes session signer to perform specific actions (e.g., Send messages) with defined limits  
 3. **Feegrant**: Primary signer grants fee allowance to session signer, so it doesn't need to hold any funds for gas
-
-## Features
-
-- 🔑 **Passkey-based key derivation** - Uses WebAuthn PRF extension for deterministic, secure key generation
-- 🔐 **Non-custodial** - Session signer address never hold funds, all gas is covered by feegrants
-- ⚡ **Seamless UX** - Sign transactions without hardware wallet popups for authorized actions  
-- 🚀 **Zero balance required** - Session signer works without any token balance
-- 🌐 **Multi-wallet support** - Works with Keplr, Leap, Cosmostation, and potentially any Cosmos wallet
-- 📦 **Framework agnostic** - Works in browsers and React Native environments
 
 ## Installation
 
@@ -232,7 +232,7 @@ pnpm test:ui
 
 ## How It Works
 
-The Stint session signer system combines WebAuthn passkeys with Cosmos SDK's authz and feegrant modules to enable secure, non-custodial session signing:
+The Stint session signer system combines WebAuthn passkeys with Cosmos SDK's authz and feegrant modules to enable secure, non-custodial, zero-balance session signing:
 
 ```mermaid
 sequenceDiagram
@@ -682,7 +682,7 @@ When using session signers, be aware of these potential risks:
 > **⚠️ CRITICAL: This software has NOT been security audited. Use only for testing and experimentation.**
 
 - **Session signers are ephemeral** and should be treated as temporary
-- **No funds at risk** - Session signers never hold any tokens, all gas is covered by feegrants
+- **Non-custodial with no funds at risk** - Session signers never hold any tokens, all gas is covered by feegrants
 - **Configurable limits** - Set appropriate authorization limits and expiration times
 - **Deterministic keys** - Private keys are derived deterministically from passkeys stored in secure hardware
 - **Revocable** - Authorizations can be revoked at any time by the primary signer
