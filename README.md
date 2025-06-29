@@ -1,5 +1,6 @@
 # Stint
 
+[![npm version](https://img.shields.io/npm/v/stint-signer.svg)](https://www.npmjs.com/package/stint-signer)
 [![codecov](https://codecov.io/gh/n2p5/stint/graph/badge.svg)](https://codecov.io/gh/n2p5/stint)
 [![Known Vulnerabilities](https://snyk.io/test/github/n2p5/stint/badge.svg)](https://snyk.io/test/github/n2p5/stint)
 
@@ -298,7 +299,7 @@ import { newSessionSigner, type Logger } from 'stint-signer'
 const sessionSigner = await newSessionSigner({
   primaryClient: SigningStargateClient,  // Required: Your primary address's client
   saltName?: string,                     // Optional: Salt for key derivation (default: 'stint-session')
-  logger?: Logger                        // Optional: Custom logger (default: consoleLogger)
+  logger?: Logger                        // Optional: Custom logger (default: no logging)
 })
 ```
 
@@ -323,7 +324,7 @@ import { newSessionSigner } from 'stint-signer'
 import { StintError, ErrorCodes, type ErrorCode } from 'stint-signer'
 
 // Logging
-import { consoleLogger, noopLogger, type Logger } from 'stint-signer'
+import { consoleLogger, type Logger } from 'stint-signer'
 
 // TypeScript types
 import type { 
@@ -427,18 +428,17 @@ Stint includes a comprehensive logging system to help you debug and monitor sess
 #### Using Built-in Loggers
 
 ```typescript
-import { newSessionSigner, consoleLogger, noopLogger } from 'stint-signer'
+import { newSessionSigner, consoleLogger } from 'stint-signer'
 
-// Default console logger (logs to console)
+// Default behavior - no logging
 const sessionSigner = await newSessionSigner({
-  primaryClient,
-  logger: consoleLogger  // Default if not specified
+  primaryClient
 })
 
-// No-op logger (discards all logs - useful for production)
+// Enable console logging for debugging
 const sessionSigner = await newSessionSigner({
   primaryClient,
-  logger: noopLogger
+  logger: consoleLogger
 })
 ```
 

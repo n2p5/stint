@@ -10,4 +10,4 @@ export type { ErrorCode } from './errors'
 
 // Logging
 export type { Logger } from './logger'
-export { consoleLogger, noopLogger } from './logger'
+export { consoleLogger } from './logger'

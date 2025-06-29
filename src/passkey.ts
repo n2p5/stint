@@ -2,7 +2,7 @@ import { sha256 } from '@cosmjs/crypto'
 import { toHex, fromBase64 } from '@cosmjs/encoding'
 import { PublicKeyCredentialWithPRF } from './types'
 import { StintError, ErrorCodes } from './errors'
-import { Logger, consoleLogger } from './logger'
+import { Logger, noopLogger } from './logger'
 
 // ============================================================================
 // SECURITY UTILITIES
@@ -68,7 +68,7 @@ export interface PasskeyConfig {
  * - Returns derived private key
  */
 export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<DerivedKey> {
-  const logger = options.logger || consoleLogger
+  const logger = options.logger || noopLogger
 
   logger.debug('Starting passkey derivation', {
     address: options.address.slice(0, 10) + '...',
@@ -193,7 +193,7 @@ interface ExistingCredential {
 async function getExistingPasskey(
   _address: string,
   saltName: string = 'stint-session',
-  logger: Logger = consoleLogger
+  logger: Logger = noopLogger
 ): Promise<ExistingCredential | null> {
   const challenge = generateSecureChallenge()
   const saltBytes = new TextEncoder().encode(saltName)
@@ -256,7 +256,7 @@ async function getExistingPasskey(
 // Create a new passkey credential with PRF extension
 async function createPasskey(
   options: InternalPasskeyConfig,
-  logger: Logger = consoleLogger
+  logger: Logger = noopLogger
 ): Promise<PublicKeyCredential> {
   const challenge = generateSecureChallenge()
 
@@ -332,7 +332,7 @@ function base64urlToBytes(base64url: string): Uint8Array {
 async function getPasskeyPRF(
   credentialId: string,
   salt: Uint8Array,
-  logger: Logger = consoleLogger
+  logger: Logger = noopLogger
 ): Promise<Uint8Array> {
   const challenge = generateSecureChallenge()
 
@@ -395,7 +395,7 @@ async function getPasskeyPRF(
 async function derivePrivateKey(
   credentialId: string,
   salt: string = 'stint-session',
-  logger: Logger = consoleLogger
+  logger: Logger = noopLogger
 ): Promise<string> {
   const saltBytes = new TextEncoder().encode(salt)
 
