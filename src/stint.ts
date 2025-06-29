@@ -16,7 +16,7 @@ import {
 } from './types'
 import { getOrCreateDerivedKey } from './passkey'
 import { StintError, ErrorCodes } from './errors'
-import { Logger, consoleLogger } from './logger'
+import { Logger, noopLogger } from './logger'
 
 // ============================================================================
 // SESSION SIGNER CREATION
@@ -29,7 +29,7 @@ import { Logger, consoleLogger } from './logger'
  * @returns Initialized SessionSigner ready for use
  */
 export async function newSessionSigner(config: SessionSignerConfig): Promise<SessionSigner> {
-  const logger = config.logger || consoleLogger
+  const logger = config.logger || noopLogger
 
   logger.debug('Initializing session signer', { saltName: config.saltName })
 
@@ -197,7 +197,7 @@ function createHasAuthzGrant(
   primaryClient: SigningStargateClient,
   primaryAddress: string,
   sessionAddress: string,
-  logger: Logger = consoleLogger
+  logger: Logger = noopLogger
 ): HasAuthzGrantFn {
   return async (
     messageType: string = '/cosmos.bank.v1beta1.MsgSend'
@@ -309,7 +309,7 @@ function createHasFeegrant(
   primaryClient: SigningStargateClient,
   primaryAddress: string,
   sessionAddress: string,
-  logger: Logger = consoleLogger
+  logger: Logger = noopLogger
 ): HasFeegrantFn {
   return async (): Promise<FeegrantInfo | null> => {
     try {
