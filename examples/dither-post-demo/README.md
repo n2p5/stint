@@ -2,6 +2,8 @@
 
 A clean, modern demo of Stint session signers built with SvelteKit and DaisyUI.
 
+![Stint Signer Dither Demo](./assets/stint-signer-dither-demo.gif)
+
 > **⚠️ EXPERIMENTAL SOFTWARE - TESTNET ONLY**
 > 
 > This is a demonstration of experimental software that has NOT been security audited. Only use on testnets with test tokens that have no real value. Do not use with real funds or in production environments.
