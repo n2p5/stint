@@ -15,9 +15,9 @@ export interface Logger {
 export const consoleLogger: Logger = {
   debug: (message: string, context?: Record<string, unknown>) => {
     if (context) {
-      console.debug(`[Stint] ${message}`, context)
+      console.log(`[Stint] ${message}`, context)
     } else {
-      console.debug(`[Stint] ${message}`)
+      console.log(`[Stint] ${message}`)
     }
   },
 

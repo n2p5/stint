@@ -2,7 +2,7 @@
   import { sessionStore } from '$lib/stores/session';
   import { onMount } from 'svelte';
   import { DITHER_ADDRESS, DEFAULT_AMOUNT, DEFAULT_MEMO } from '$lib/constants';
-  import { exampleLogger } from '$lib/logger';
+  import { consoleLogger } from 'stint-signer';
   import { createTxLink, type TxLinkData } from '$lib/utils/explorer';
   
   let recipient = DITHER_ADDRESS;
@@ -14,7 +14,7 @@
   let cosmosModules: any = null;
   
   onMount(async () => {
-    exampleLogger.debug('Loading cosmos modules...');
+    consoleLogger.debug('Loading cosmos modules...');
     try {
       // Load cosmos modules
       const [bankModule, authzModule, anyModule] = await Promise.all([
@@ -29,9 +29,9 @@
         Any: anyModule.Any
       };
       
-      exampleLogger.debug('Cosmos modules loaded successfully');
+      consoleLogger.debug('Cosmos modules loaded successfully');
     } catch (err) {
-      exampleLogger.error('Failed to load cosmos modules', err instanceof Error ? err : undefined);
+      consoleLogger.error('Failed to load cosmos modules', err instanceof Error ? err : undefined);
     }
   });
   
@@ -44,7 +44,7 @@
     error = '';
     successTx = null;
     
-    exampleLogger.info('Starting transaction preparation...', {
+    consoleLogger.info('Starting transaction preparation...', {
       recipient,
       amount,
       memo: memo.slice(0, 50) + (memo.length > 50 ? '...' : '')
@@ -65,7 +65,7 @@
       const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       const sessionAddress = $sessionStore.sessionSigner.sessionAddress();
       
-      exampleLogger.debug('Creating MsgSend message...', {
+      consoleLogger.debug('Creating MsgSend message...', {
         fromAddress: primaryAddress,
         toAddress: recipient,
         amount: amountNum
@@ -78,7 +78,7 @@
         amount: [{ denom: 'uphoton', amount: String(amount) }]
       });
       
-      exampleLogger.debug('Encoding MsgSend...');
+      consoleLogger.debug('Encoding MsgSend...');
       // Encode the MsgSend
       const msgSendBytes = cosmosModules.MsgSend.encode(msgSend).finish();
       const msgSendAny = cosmosModules.Any.fromPartial({
@@ -86,7 +86,7 @@
         value: msgSendBytes
       });
       
-      exampleLogger.debug('Creating MsgExec wrapper...', {
+      consoleLogger.debug('Creating MsgExec wrapper...', {
         grantee: sessionAddress,
         msgType: '/cosmos.bank.v1beta1.MsgSend'
       });
@@ -107,7 +107,7 @@
         granter: primaryAddress, // This tells the chain to use the feegrant!
       };
       
-      exampleLogger.info('Broadcasting transaction...', {
+      consoleLogger.info('Broadcasting transaction...', {
         signer: sessionAddress,
         feeGranter: primaryAddress,
         gasLimit: fee.gas,
@@ -122,7 +122,7 @@
       );
       
       if (result.code !== 0) {
-        exampleLogger.error('Transaction failed on chain', undefined, { 
+        consoleLogger.error('Transaction failed on chain', undefined, { 
           code: result.code, 
           rawLog: result.rawLog 
         });
@@ -131,7 +131,7 @@
       
       successTx = createTxLink(result.transactionHash);
       
-      exampleLogger.info('Transaction successful!', {
+      consoleLogger.info('Transaction successful!', {
         transactionHash: result.transactionHash,
         gasUsed: result.gasUsed,
         gasWanted: result.gasWanted,
@@ -144,7 +144,7 @@
       amount = DEFAULT_AMOUNT;
       memo = DEFAULT_MEMO;
     } catch (err) {
-      exampleLogger.error('Transaction failed', err instanceof Error ? err : undefined, {
+      consoleLogger.error('Transaction failed', err instanceof Error ? err : undefined, {
         operation: 'sendTransaction',
         recipient,
         amount
