@@ -4,6 +4,7 @@ import { consoleLogger, noopLogger } from './logger'
 describe('logger', () => {
   // Store original console methods
   const originalConsole = {
+    log: console.log,
     debug: console.debug,
     info: console.info,
     warn: console.warn,
@@ -12,6 +13,7 @@ describe('logger', () => {
 
   beforeEach(() => {
     // Mock console methods
+    console.log = vi.fn()
     console.debug = vi.fn()
     console.info = vi.fn()
     console.warn = vi.fn()
@@ -20,6 +22,7 @@ describe('logger', () => {
 
   afterEach(() => {
     // Restore original console methods
+    console.log = originalConsole.log
     console.debug = originalConsole.debug
     console.info = originalConsole.info
     console.warn = originalConsole.warn
@@ -29,13 +32,13 @@ describe('logger', () => {
   describe('consoleLogger', () => {
     it('should log debug messages without context', () => {
       consoleLogger.debug('test debug message')
-      expect(console.debug).toHaveBeenCalledWith('[Stint] test debug message')
+      expect(console.log).toHaveBeenCalledWith('[Stint] test debug message')
     })
 
     it('should log debug messages with context', () => {
       const context = { key: 'value' }
       consoleLogger.debug('test debug message', context)
-      expect(console.debug).toHaveBeenCalledWith('[Stint] test debug message', context)
+      expect(console.log).toHaveBeenCalledWith('[Stint] test debug message', context)
     })
 
     it('should log info messages without context', () => {

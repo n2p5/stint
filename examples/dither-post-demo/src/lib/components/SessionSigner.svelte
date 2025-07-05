@@ -1,18 +1,12 @@
 <script lang="ts">
   import { sessionStore } from '$lib/stores/session';
-  import { newSessionSigner, StintError, ErrorCodes } from 'stint-signer';
+  import { newSessionSigner, StintError, ErrorCodes, consoleLogger } from 'stint-signer';
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
-  import { createUILogger } from '$lib/logger';
   
   let isCreating = false;
   let error = '';
   let status = '';
-  
-  // Create a logger that updates the UI status
-  const logger = createUILogger((newStatus: string) => {
-    status = newStatus;
-  });
   
   async function createSession() {
     isCreating = true;
@@ -22,7 +16,7 @@
     try {
       if (!$sessionStore.signer) throw new Error('No wallet connected');
       
-      logger.info('Initializing primary client...');
+      status = 'Initializing primary client...';
       
       // Create primary client
       const primaryClient = await SigningStargateClient.connectWithSigner(
@@ -33,16 +27,16 @@
         }
       );
       
-      logger.info('Creating session signer with passkey...');
+      status = 'Creating session signer with passkey...';
       
-      // Create session signer with logger
+      // Create session signer with consoleLogger from stint
       const sessionSigner = await newSessionSigner({
         primaryClient,
         saltName: 'stint-session',
-        logger
+        logger: consoleLogger
       });
       
-      logger.info('Session signer created successfully!');
+      status = 'Session signer created successfully!';
       
       sessionStore.update(state => ({
         ...state,
@@ -52,7 +46,7 @@
       status = ''; // Clear status on success
     } catch (err) {
       if (err instanceof StintError) {
-        logger.error(`Stint operation failed: ${err.message}`, err, { 
+        consoleLogger.error(`Stint operation failed: ${err.message}`, err, { 
           code: err.code, 
           details: err.details 
         });
@@ -76,7 +70,7 @@
             error = `Session signer creation failed: ${err.message}`;
         }
       } else {
-        logger.error('Unexpected error during session creation', err instanceof Error ? err : undefined);
+        consoleLogger.error('Unexpected error during session creation', err instanceof Error ? err : undefined);
         error = err instanceof Error ? err.message : 'Failed to create session signer';
       }
     } finally {

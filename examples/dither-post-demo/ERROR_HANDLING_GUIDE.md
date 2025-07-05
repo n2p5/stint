@@ -4,24 +4,25 @@ This example demonstrates comprehensive error handling and logging with the Stin
 
 ## Logger Implementation
 
-The example uses a custom logger (`lib/logger.ts`) that provides:
+The example uses Stint's built-in `consoleLogger` that provides:
 
-1. **Console Logging**: Formatted console output with emojis for easy identification
-2. **UI Integration**: Logger that updates UI status messages
+1. **Console Logging**: Structured console output with `[Stint]` prefix
+2. **All Log Levels Visible**: Debug messages use `console.log()` for visibility
 3. **Structured Context**: Rich context data for debugging
 
 ### Usage Examples
 
 ```typescript
-import { exampleLogger, createUILogger } from '$lib/logger';
+import { consoleLogger } from 'stint-signer';
 
 // Basic logging
-exampleLogger.info('Operation started', { userId: 'abc123' });
-exampleLogger.error('Operation failed', error, { context: 'additional data' });
+consoleLogger.info('Operation started', { userId: 'abc123' });
+consoleLogger.error('Operation failed', error, { context: 'additional data' });
 
-// UI-integrated logging
-const uiLogger = createUILogger((status) => {
-  statusMessage = status; // Updates UI
+// Pass logger to newSessionSigner
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger: consoleLogger
 });
 ```
 
@@ -83,9 +84,9 @@ const uiLogger = createUILogger((status) => {
 Open browser console to see all Stint operations:
 
 ```
-🔍 [Stint Debug] Starting passkey derivation
-ℹ️ [Stint Info] Initializing primary client...
-ℹ️ [Stint Info] Creating session signer with passkey...
+[Stint] Initializing session signer
+[Stint] Starting passkey derivation
+[Stint] Session signer created successfully!
 ```
 
 ### 2. Authorization Debugging
@@ -138,11 +139,11 @@ Monitor transaction construction and broadcast:
 For production, consider using a no-op logger or sending logs to a monitoring service:
 
 ```typescript
-import { noopLogger } from 'stint-signer';
+import { noopLogger, consoleLogger } from 'stint-signer';
 
 const sessionSigner = await newSessionSigner({
   primaryClient,
-  logger: process.env.NODE_ENV === 'production' ? noopLogger : exampleLogger
+  logger: process.env.NODE_ENV === 'production' ? noopLogger : consoleLogger
 });
 ```
 
@@ -152,16 +153,26 @@ Integrate with error monitoring services:
 
 ```typescript
 import * as Sentry from '@sentry/browser';
+import { Logger } from 'stint-signer';
 
 const productionLogger: Logger = {
+  debug: (message, context) => {
+    // Skip debug logs in production
+  },
+  info: (message, context) => {
+    console.info(`[Stint] ${message}`, context);
+  },
+  warn: (message, context) => {
+    console.warn(`[Stint] ${message}`, context);
+    Sentry.captureMessage(message, 'warning');
+  },
   error: (message, error, context) => {
-    console.error(message, error);
+    console.error(`[Stint] ${message}`, error, context);
     Sentry.captureException(error || new Error(message), {
       tags: { component: 'stint' },
       extra: context
     });
-  },
-  // ... other methods
+  }
 };
 ```
 

@@ -3,7 +3,7 @@
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
   import { DITHER_ADDRESS } from '$lib/constants';
-  import { exampleLogger } from '$lib/logger';
+  import { consoleLogger } from 'stint-signer';
   import { createTxLink, type TxLinkData } from '$lib/utils/explorer';
   
   let isChecking = false;
@@ -24,7 +24,7 @@
     if (!$sessionStore.sessionSigner) return;
     
     isChecking = true;
-    exampleLogger.info('Checking authorization status...');
+    consoleLogger.info('Checking authorization status...');
     
     try {
       const [authz, feegrant] = await Promise.all([
@@ -35,7 +35,7 @@
       hasAuthzGrant = !!authz;
       hasFeegrant = !!feegrant;
       
-      exampleLogger.info('Authorization check completed', { 
+      consoleLogger.info('Authorization check completed', { 
         hasAuthzGrant, 
         hasFeegrant,
         authzExpiration: authz?.expiration?.toISOString(),
@@ -43,7 +43,7 @@
       });
       
     } catch (err) {
-      exampleLogger.warn('Failed to check authorizations', { 
+      consoleLogger.warn('Failed to check authorizations', { 
         error: err instanceof Error ? err.message : 'Unknown error' 
       });
       // Don't show error to user as this is non-critical
@@ -60,10 +60,10 @@
     successTx = null;
     revokeTx = null;
     
-    exampleLogger.info('Starting authorization creation...');
+    consoleLogger.info('Starting authorization creation...');
     
     try {
-      exampleLogger.debug('Creating primary client...');
+      consoleLogger.debug('Creating primary client...');
       // Check primary wallet balance
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
@@ -75,10 +75,10 @@
       
       const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       
-      exampleLogger.debug('Checking balance...', { primaryAddress });
+      consoleLogger.debug('Checking balance...', { primaryAddress });
       const photonBalance = await primaryClient.getBalance(primaryAddress, 'uphoton');
       
-      exampleLogger.info('Balance check completed', { 
+      consoleLogger.info('Balance check completed', { 
         balance: photonBalance.amount,
         denom: photonBalance.denom 
       });
@@ -87,7 +87,7 @@
         throw new Error(`Insufficient PHOTON balance. You have ${photonBalance.amount} uphoton but need at least 2,000,000 uphoton (2 PHOTON).`);
       }
       
-      exampleLogger.debug('Generating delegation messages...', {
+      consoleLogger.debug('Generating delegation messages...', {
         spendLimit: '1000000 uphoton',
         gasLimit: '1000000 uphoton',
         recipient: DITHER_ADDRESS
@@ -101,7 +101,7 @@
         allowedRecipients: [DITHER_ADDRESS] // Dither testnet
       });
       
-      exampleLogger.info('Broadcasting authorization transaction...');
+      consoleLogger.info('Broadcasting authorization transaction...');
       
       // Broadcast transaction (reuse the primaryClient and primaryAddress from above)
       const result = await primaryClient.signAndBroadcast(
@@ -112,7 +112,7 @@
       );
       
       if (result.code !== 0) {
-        exampleLogger.error('Transaction failed', undefined, { 
+        consoleLogger.error('Transaction failed', undefined, { 
           code: result.code, 
           rawLog: result.rawLog 
         });
@@ -120,7 +120,7 @@
       }
       
       successTx = createTxLink(result.transactionHash);
-      exampleLogger.info('Authorization transaction successful!', { 
+      consoleLogger.info('Authorization transaction successful!', { 
         transactionHash: result.transactionHash,
         gasUsed: result.gasUsed,
         gasWanted: result.gasWanted
@@ -129,7 +129,7 @@
       // Recheck authorizations
       await checkAuthorizations();
     } catch (err) {
-      exampleLogger.error('Failed to create authorizations', err instanceof Error ? err : undefined, {
+      consoleLogger.error('Failed to create authorizations', err instanceof Error ? err : undefined, {
         operation: 'createAuthorizations'
       });
       error = err instanceof Error ? err.message : 'Failed to create authorizations';
@@ -146,14 +146,14 @@
     successTx = null;
     revokeTx = null;
     
-    exampleLogger.info('Starting authorization revocation...');
+    consoleLogger.info('Starting authorization revocation...');
     
     try {
-      exampleLogger.debug('Generating revocation messages...');
+      consoleLogger.debug('Generating revocation messages...');
       // Generate revocation messages
       const messages = $sessionStore.sessionSigner.revokeDelegationMessages();
       
-      exampleLogger.debug('Creating primary client for revocation...');
+      consoleLogger.debug('Creating primary client for revocation...');
       // Create primary client for broadcasting
       const primaryClient = await SigningStargateClient.connectWithSigner(
         RPC_URL,
@@ -163,7 +163,7 @@
         }
       );
       
-      exampleLogger.info('Broadcasting revocation transaction...');
+      consoleLogger.info('Broadcasting revocation transaction...');
       // Broadcast transaction
       const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
       const result = await primaryClient.signAndBroadcast(
@@ -174,7 +174,7 @@
       );
       
       if (result.code !== 0) {
-        exampleLogger.error('Revocation transaction failed', undefined, { 
+        consoleLogger.error('Revocation transaction failed', undefined, { 
           code: result.code, 
           rawLog: result.rawLog 
         });
@@ -182,7 +182,7 @@
       }
       
       revokeTx = createTxLink(result.transactionHash);
-      exampleLogger.info('Revocation transaction successful!', { 
+      consoleLogger.info('Revocation transaction successful!', { 
         transactionHash: result.transactionHash,
         gasUsed: result.gasUsed,
         gasWanted: result.gasWanted
@@ -191,7 +191,7 @@
       // Recheck authorizations
       await checkAuthorizations();
     } catch (err) {
-      exampleLogger.error('Failed to revoke authorizations', err instanceof Error ? err : undefined, {
+      consoleLogger.error('Failed to revoke authorizations', err instanceof Error ? err : undefined, {
         operation: 'revokeAuthorizations'
       });
       error = err instanceof Error ? err.message : 'Failed to revoke authorizations';
