@@ -17,6 +17,7 @@ import {
 import { getOrCreateDerivedKey } from './passkey'
 import { StintError, ErrorCodes } from './errors'
 import { Logger, noopLogger } from './logger'
+import { createExecuteHelpers } from './execute'
 
 // ============================================================================
 // SESSION SIGNER CREATION
@@ -134,7 +135,13 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
       generateConditionalDelegationMessagesFn(signer, config),
     revokeDelegationMessages: (msgTypeUrl?: string) =>
       revokeDelegationMessagesFn(primaryAddress, sessionAddress, msgTypeUrl),
+
+    // Execute helpers - will be added after signer creation
+    execute: null as any,
   }
+
+  // Add execute helpers after signer is created (needs reference to signer)
+  signer.execute = createExecuteHelpers(signer, logger)
 
   return signer
 }

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { sessionStore } from '$lib/stores/session';
-  import { onMount } from 'svelte';
   import { DITHER_ADDRESS, DEFAULT_AMOUNT, DEFAULT_MEMO } from '$lib/constants';
   import { consoleLogger } from 'stint-signer';
   import { createTxLink, type TxLinkData } from '$lib/utils/explorer';
@@ -11,40 +10,17 @@
   let isSending = false;
   let error = '';
   let successTx: TxLinkData | null = null;
-  let cosmosModules: any = null;
   
-  onMount(async () => {
-    consoleLogger.debug('Loading cosmos modules...');
-    try {
-      // Load cosmos modules
-      const [bankModule, authzModule, anyModule] = await Promise.all([
-        import('cosmjs-types/cosmos/bank/v1beta1/tx'),
-        import('cosmjs-types/cosmos/authz/v1beta1/tx'),
-        import('cosmjs-types/google/protobuf/any')
-      ]);
-      
-      cosmosModules = {
-        MsgSend: bankModule.MsgSend,
-        MsgExec: authzModule.MsgExec,
-        Any: anyModule.Any
-      };
-      
-      consoleLogger.debug('Cosmos modules loaded successfully');
-    } catch (err) {
-      consoleLogger.error('Failed to load cosmos modules', err instanceof Error ? err : undefined);
-    }
-  });
-  
-  $: canSend = $sessionStore.sessionSigner && recipient && amount && Number(amount) > 0 && cosmosModules;
+  $: canSend = $sessionStore.sessionSigner && recipient && amount && Number(amount) > 0;
   
   async function sendTransaction() {
-    if (!$sessionStore.sessionSigner || !cosmosModules) return;
+    if (!$sessionStore.sessionSigner) return;
     
     isSending = true;
     error = '';
     successTx = null;
     
-    consoleLogger.info('Starting transaction preparation...', {
+    consoleLogger.info('Starting transaction with simplified execute.send...', {
       recipient,
       amount,
       memo: memo.slice(0, 50) + (memo.length > 50 ? '...' : '')
@@ -62,72 +38,16 @@
         throw new Error('Amount must be a positive integer between 1 and 1,000,000 uphoton (1 PHOTON)');
       }
       
-      const primaryAddress = $sessionStore.sessionSigner.primaryAddress();
-      const sessionAddress = $sessionStore.sessionSigner.sessionAddress();
-      
-      consoleLogger.debug('Creating MsgSend message...', {
-        fromAddress: primaryAddress,
+      // Use the new simplified execute.send method!
+      const result = await $sessionStore.sessionSigner.execute.send({
         toAddress: recipient,
-        amount: amountNum
-      });
-      
-      // Create MsgSend message
-      const msgSend = cosmosModules.MsgSend.fromPartial({
-        fromAddress: primaryAddress,
-        toAddress: recipient,
-        amount: [{ denom: 'uphoton', amount: String(amount) }]
-      });
-      
-      consoleLogger.debug('Encoding MsgSend...');
-      // Encode the MsgSend
-      const msgSendBytes = cosmosModules.MsgSend.encode(msgSend).finish();
-      const msgSendAny = cosmosModules.Any.fromPartial({
-        typeUrl: '/cosmos.bank.v1beta1.MsgSend',
-        value: msgSendBytes
-      });
-      
-      consoleLogger.debug('Creating MsgExec wrapper...', {
-        grantee: sessionAddress,
-        msgType: '/cosmos.bank.v1beta1.MsgSend'
-      });
-      
-      // Create MsgExec message
-      const execMsg = {
-        typeUrl: '/cosmos.authz.v1beta1.MsgExec',
-        value: {
-          grantee: sessionAddress,
-          msgs: [msgSendAny]
+        amount: [{ denom: 'uphoton', amount: String(amount) }],
+        memo,
+        fee: {
+          amount: [{ denom: 'uphoton', amount: '5000' }],
+          gas: '200000'
         }
-      };
-      
-      // Send transaction using session signer with explicit fee (PHOTON only + granter)
-      const fee = {
-        amount: [{ denom: 'uphoton', amount: '5000' }],
-        gas: '200000',
-        granter: primaryAddress, // This tells the chain to use the feegrant!
-      };
-      
-      consoleLogger.info('Broadcasting transaction...', {
-        signer: sessionAddress,
-        feeGranter: primaryAddress,
-        gasLimit: fee.gas,
-        feeAmount: fee.amount
       });
-      
-      const result = await $sessionStore.sessionSigner.client.signAndBroadcast(
-        sessionAddress,
-        [execMsg],
-        fee,
-        memo
-      );
-      
-      if (result.code !== 0) {
-        consoleLogger.error('Transaction failed on chain', undefined, { 
-          code: result.code, 
-          rawLog: result.rawLog 
-        });
-        throw new Error(`Transaction failed: ${result.rawLog}`);
-      }
       
       successTx = createTxLink(result.transactionHash);
       
@@ -261,14 +181,8 @@
           >
             {#if isSending}
               <span class="loading loading-spinner"></span>
-            {:else if !cosmosModules}
-              <span class="loading loading-spinner"></span>
             {/if}
-            {#if !cosmosModules}
-              Loading modules...
-            {:else}
-              Post to Dither
-            {/if}
+            Post to Dither
           </button>
         </div>
       </div>

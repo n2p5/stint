@@ -4,23 +4,51 @@
 [![codecov](https://codecov.io/gh/n2p5/stint/graph/badge.svg)](https://codecov.io/gh/n2p5/stint)
 [![Known Vulnerabilities](https://snyk.io/test/github/n2p5/stint/badge.svg)](https://snyk.io/test/github/n2p5/stint)
 
-Short-lived, non-custodial, zero-balance passkey based session signers for the Cosmos SDK ecosystem.
+**Zero-balance session signers for smooth Web3 UX.** Post, vote, and transact without wallet popups using Passkeys + Cosmos SDK authz + feegrant modules.
 
-> **⚠️ EXPERIMENTAL SOFTWARE WARNING**
+> **⚠️ EXPERIMENTAL SOFTWARE - TESTNET ONLY**
 >
-> **This project is experimental and has NOT undergone a security audit.** Use at your own risk and only with funds you can afford to lose. Do not use in production environments or with significant amounts of cryptocurrency.
+> **This project is experimental and has NOT undergone a security audit.** Only use on testnets with test tokens that have no real value. Do not use with real funds or in production environments.
 
-## Overview
+## What is Stint?
 
-Stint enables ephemeral session signers that can perform limited blockchain actions without requiring constant hardware wallet interaction. It uses Cosmos SDK's `authz` and `feegrant` modules combined with WebAuthn Passkeys for secure, deterministic key derivation.
+Stint creates **temporary signers** that can perform limited actions on behalf of your main wallet without holding any funds. Perfect for social dApps, games, and frequent interactions.
 
-## Features
+**How it works:**
 
-- 🔑 **Passkey-based key derivation** - Uses WebAuthn PRF extension for deterministic, secure key generation
-- 🔐 **Non-custodial** - Session signer's private key never leaves the client
-- ⚡ **Seamless UX** - Sign transactions without hardware wallet popups for authorized actions  
-- 🚀 **Zero balance required** - Session signer works without any token balance
-- 🌐 **Multi-wallet support** - Works with Keplr, Leap, Cosmostation, and any Cosmos wallet
+1. **Create a session signer** using your device's Passkey (fingerprint/Face ID)
+2. **Authorize specific actions** (like posting to social networks) with spending limits
+3. **Interact seamlessly** - no more wallet popups for every small transaction
+
+Your main wallet stays secure, session signers are time-limited, and you can revoke access anytime.
+
+## Why Use Stint?
+
+Perfect for apps that need frequent, small transactions:
+
+### 🌐 **Social Media dApps**
+
+- Post messages without wallet popups
+- Like/react to content instantly
+- Comment and interact seamlessly
+
+### 🎮 **Gaming & NFTs**
+
+- In-game transactions and trades
+- Achievement claims and rewards
+- Tournament entries
+
+### 🗳️ **DAOs & Governance**  
+
+- Vote on multiple proposals
+- Delegate voting power
+- Submit proposals without friction
+
+### 💰 **Micro-payments**
+
+- Content tips and donations
+- Subscription payments
+- Pay-per-use services
 
 ## Installation
 
@@ -36,80 +64,113 @@ yarn add stint-signer
 
 ```typescript
 import { newSessionSigner } from 'stint-signer'
-import { SigningStargateClient } from '@cosmjs/stargate'
 
-// 1. Create session signer
+// 1. Create session signer (triggers Passkey prompt)
 const sessionSigner = await newSessionSigner({
-  primaryClient,  // Your existing SigningStargateClient
-  saltName: 'my-app' // Optional: defaults to 'stint-session'
+  primaryClient  // Your existing SigningStargateClient
 })
 
-// 2. Generate authorization messages
-const authorizedRecipient = 'atone1recipient123...'
+// 2. Define authorized recipient for security
+const authorizedRecipient = 'atone1dither123...' // Only allow sends to this address
+
+// 3. Set up permissions (one-time setup)
 const setupMessages = sessionSigner.generateDelegationMessages({
   sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-  spendLimit: { denom: 'uphoton', amount: '1000000' },   // 1 PHOTON spending limit
-  gasLimit: { denom: 'uphoton', amount: '500000' },      // 0.5 PHOTON gas limit
-  allowedRecipients: [authorizedRecipient]               // Restrict to specific recipient
+  spendLimit: { denom: 'uphoton', amount: '1000000' },   // Max 1 PHOTON
+  gasLimit: { denom: 'uphoton', amount: '500000' },      // 0.5 PHOTON for gas
+  allowedRecipients: [authorizedRecipient]              // Restrict to specific address
 })
 
-// 3. Broadcast setup transaction with your primary signer
-const primaryAddress = sessionSigner.primaryAddress()
-await primaryClient.signAndBroadcast(primaryAddress, setupMessages, 'auto')
-
-// 4. Use session signer to send transactions!
-await sessionSigner.client.sendTokens(
-  sessionSigner.primaryAddress(), // Funds come from primary signer
-  authorizedRecipient,           // Must match allowedRecipients
-  [{ denom: 'uphoton', amount: '100000' }], // 0.1 PHOTON
-  'auto',
-  'Sent via session signer'
+await primaryClient.signAndBroadcast(
+  sessionSigner.primaryAddress(), 
+  setupMessages, 
+  'auto'
 )
+
+// 4. Now send transactions instantly! 🚀
+await sessionSigner.execute.send({
+  toAddress: authorizedRecipient,  // Must match allowedRecipients
+  amount: [{ denom: 'uphoton', amount: '100000' }],
+  memo: 'Posted via session signer!'
+})
 ```
 
-## API Reference
+**That's it!** No more wallet popups for authorized transactions.
 
-### `newSessionSigner(config)`
+## Live Example
 
-Creates a new session signer with passkey-based key derivation.
+🎯 **[Try the Dither Demo](./examples/dither-post-demo)** - Post to a decentralized social network without wallet popups!
+
+The demo shows how to:
+
+- Create session signers with WebAuthn Passkeys  
+- Set up permissions in one transaction
+- Post messages instantly using session signers
+
+## Basic API
+
+### Creating a Session Signer
 
 ```typescript
+import { newSessionSigner } from 'stint-signer'
+
 const sessionSigner = await newSessionSigner({
-  primaryClient: SigningStargateClient,  // Required: Your primary address's client
-  saltName?: string,                     // Optional: Salt for key derivation
-  logger?: Logger                        // Optional: Custom logger
+  primaryClient,              // Your SigningStargateClient
+  saltName?: 'my-app',       // Optional: isolate different apps
+  logger?: consoleLogger     // Optional: enable debug logs
 })
 ```
 
-### SessionSigner Methods
+### Setting Up Permissions
 
-- `client`: SigningStargateClient for the session signer
-- `primaryAddress()`: Get the primary signer address
-- `sessionAddress()`: Get the session signer address  
-- `generateDelegationMessages(config)`: Generate setup messages for authorization
-- `generateConditionalDelegationMessages(config)`: Generate messages only for missing grants
-- `hasAuthzGrant(messageType?)`: Check if authz grant exists
-- `hasFeegrant()`: Check if feegrant exists
-- `revokeDelegationMessages(msgTypeUrl?)`: Generate revocation messages
+```typescript
+// Generate permission messages
+const messages = sessionSigner.generateDelegationMessages({
+  sessionExpiration: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+  spendLimit: { denom: 'uphoton', amount: '1000000' },   // Max spending
+  gasLimit: { denom: 'uphoton', amount: '500000' },      // Gas allowance
+  allowedRecipients: ['atone1...']  // Optional: restrict recipients
+})
 
-## Development
-
-```bash
-pnpm install       # Install dependencies
-pnpm build         # Build library
-pnpm dev           # Run in watch mode
-pnpm test          # Run tests
-pnpm typecheck     # Type check
-pnpm lint          # Lint code
+// Sign with your main wallet (one time)
+await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
 ```
 
-## Documentation
+### Using Session Signers
 
-For advanced usage, examples, and detailed documentation, see the [Complete Guide](./docs/GUIDE.md).
+```typescript
+// Send tokens instantly (no wallet popup!)
+await sessionSigner.execute.send({
+  toAddress: 'atone1recipient...',
+  amount: [{ denom: 'uphoton', amount: '100000' }],
+  memo: 'Instant transaction!'
+})
 
-## Examples
+// Check permissions
+const hasPermission = await sessionSigner.hasAuthzGrant()
+const hasGasAllowance = await sessionSigner.hasFeegrant()
+```
 
-- [Dither Post Demo](./examples/dither-post-demo) - Full example of session signer creation with posting on Dither
+## Learn More
+
+📖 **[Complete Guide](./docs/GUIDE.md)** - Advanced usage, security considerations, and detailed examples
+
+🎯 **[Example App](./examples/dither-post-demo)** - Full working demo with Dither social network
+
+## Key Features
+
+✅ **Zero-balance signers** - Session signers never hold funds
+
+✅ **Passkey security** - Uses device biometrics for key derivation
+
+✅ **Time-limited** - Sessions expire automatically
+
+✅ **Revocable** - Cancel permissions anytime
+
+✅ **Scoped permissions** - Limit spending, recipients, and actions
+
+✅ **Multi-wallet support** - Works with Keplr, Leap, Cosmostation
+
 
 ## License
 

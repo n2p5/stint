@@ -7,6 +7,11 @@ This guide covers advanced usage, detailed examples, and comprehensive documenta
 - [Why Use Session Signers?](#why-use-session-signers)
 - [How It Works](#how-it-works)
 - [Complete Flow Example](#complete-flow-example)
+- [How-To Guides](#how-to-guides)
+  - [Post to Dither](#post-to-dither)
+  - [Working with AtomOne](#working-with-atomone)
+  - [Using MsgExec for Authz](#using-msgexec-for-authz)
+  - [Debugging with Logging](#debugging-with-logging)
 - [API Reference](#api-reference)
 - [Multiple Session Signers](#multiple-session-signers)
 - [Custom Logging](#custom-logging)
@@ -29,7 +34,7 @@ A session signer, when narrowly scoped, can be useful for simplifying the User E
 The system works by creating a **session signer** that never holds funds but can transact on behalf of your primary signer:
 
 1. **Passkey + PRF**: Creates a deterministic private key using WebAuthn Passkey with PRF extension
-2. **Authz Grant**: Primary signer authorizes session signer to perform specific actions (e.g., Send messages) with defined limits  
+2. **Authz Grant**: Primary signer authorizes session signer to perform specific actions (e.g., Send messages) with defined limits
 3. **Feegrant**: Primary signer grants fee allowance to session signer, so it doesn't need to hold any funds for gas
 
 ### Technical Flow Diagram
@@ -66,7 +71,8 @@ sequenceDiagram
 
     rect rgb(0, 150, 50)
         Note over User, Chain: 3. Session Usage
-        User->>Session: sendTokens()
+        User->>Session: execute.send()
+        Session->>Session: Create MsgExec wrapper
         Session->>Session: Sign transaction
         Session->>Chain: Submit transaction
         Chain->>Chain: Verify authz grant
@@ -127,22 +133,20 @@ async function stintExample() {
     console.log('Session signer already authorized!')
   }
 
-  // 5. Use session signer client to send funds on behalf of primary address
+  // 5. Send transaction using simplified execute.send() method
   const sendAmount = [{ denom: 'uphoton', amount: '500000' }] // 0.5 PHOTON (within limits)
 
   console.log('Sending transaction via session signer...')
   
-  // Session signer client sends funds with memo (gas fees automatically covered by feegrant)
-  const sendResult = await sessionSigner.client.sendTokens(
-    sessionSigner.primaryAddress(), // Funds come from primary address
-    authorizedRecipient, // Must match allowedRecipients from authorization
-    sendAmount,
-    'auto',
-    'Sent via Stint session signer 🚀' // Optional memo
-  )
-
-  console.log('Transaction successful:', sendResult.transactionHash)
-  console.log('Funds transferred from primary to isolated account!')
+  // Use the simplified execute.send method (automatically handles MsgExec wrapping)
+  const result = await sessionSigner.execute.send({
+    toAddress: authorizedRecipient,  // Must match allowedRecipients
+    amount: sendAmount,
+    memo: 'Transaction via session signer'
+  })
+  
+  console.log('Transaction successful!')
+  console.log('Funds transferred from primary using session signer authorization!')
 
   // The session signer:
   // ✅ Never held any funds
@@ -165,6 +169,174 @@ stintExample().catch(console.error)
 - **Security**: Passkey-based deterministic key derivation
 - **Revocable**: Primary signer maintains full control
 
+## How-To Guides
+
+### Post to Dither
+
+[Dither](https://testnet.dither.network) is a decentralized social network on AtomOne. Here's how to post using a session signer:
+
+```typescript
+import { newSessionSigner } from 'stint-signer'
+
+// Dither's posting address on AtomOne testnet
+const DITHER_ADDRESS = 'atone1qh95tzhnn9d5fkr3ejzpdcrdgvp45ccd4skl5x0z5y6kqp6jytuqclvpsp'
+
+// Create session signer
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  saltName: 'dither-posts'
+})
+
+// Set up authorization for Dither posting
+const messages = sessionSigner.generateDelegationMessages({
+  sessionExpiration: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week
+  spendLimit: { denom: 'uphoton', amount: '100000' }, // 0.1 PHOTON for posts
+  gasLimit: { denom: 'uphoton', amount: '500000' },   // 0.5 PHOTON for gas
+  allowedRecipients: [DITHER_ADDRESS] // Only allow posting to Dither
+})
+
+// Authorize with primary signer
+await primaryClient.signAndBroadcast(primaryAddress, messages, 'auto')
+
+// Now post to Dither! Use the simplified execute.send method
+await sessionSigner.execute.send({
+  toAddress: DITHER_ADDRESS,
+  amount: [{ denom: 'uphoton', amount: '100' }], // Minimal amount required
+  memo: 'Hello Dither! Posted via Stint session signer 🚀' // Your post content
+})
+```
+
+### Working with AtomOne
+
+AtomOne uses PHOTON as its gas token. Here are the key considerations:
+
+```typescript
+// AtomOne denomination requirements
+const config = {
+  // Spending limit can be ATOM or PHOTON
+  spendLimit: { 
+    denom: 'uatom',    // or 'uphoton'
+    amount: '1000000'  // 1 ATOM or 1 PHOTON
+  },
+  
+  // Gas MUST be PHOTON on AtomOne
+  gasLimit: { 
+    denom: 'uphoton',  // Required: AtomOne only accepts PHOTON for gas
+    amount: '500000'   // 0.5 PHOTON
+  }
+}
+
+// When sending transactions, ensure fee uses PHOTON
+const fee = {
+  amount: [{ denom: 'uphoton', amount: '5000' }], // PHOTON only
+  gas: '200000',
+  granter: primaryAddress // Important: enables feegrant usage
+}
+```
+
+### Simple Execute API (Recommended)
+
+The easiest way to use session signers is with the `execute` helpers that automatically handle MsgExec wrapping:
+
+```typescript
+// Send tokens (common use case)
+await sessionSigner.execute.send({
+  toAddress: 'atone1recipient...',
+  amount: [{ denom: 'uphoton', amount: '1000' }],
+  memo: 'Payment for services'
+})
+
+// With custom fees
+await sessionSigner.execute.send({
+  toAddress: 'atone1recipient...',
+  amount: [{ denom: 'uphoton', amount: '1000' }],
+  memo: 'Payment for services',
+  fee: {
+    amount: [{ denom: 'uphoton', amount: '8000' }],
+    gas: '300000'
+  }
+})
+
+// Execute custom messages (advanced)
+await sessionSigner.execute.custom({
+  messages: [msgStakeAny, msgVoteAny], // Pre-encoded protobuf messages
+  memo: 'Batch governance actions'
+})
+```
+
+### Advanced: Manual MsgExec for Custom Messages
+
+For advanced use cases or custom message types, you can manually construct MsgExec. **Important: You cannot use convenience methods like `sendTokens` because they don't support authz delegation.**
+
+```typescript
+import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
+import { MsgExec } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
+import { Any } from 'cosmjs-types/google/protobuf/any'
+
+// 1. Create the inner message (what you want to do)
+const msgSend = MsgSend.fromPartial({
+  fromAddress: primaryAddress,  // Funds come from primary
+  toAddress: recipientAddress,
+  amount: [{ denom: 'uphoton', amount: '1000' }]
+})
+
+// 2. Encode as Any type
+const msgSendBytes = MsgSend.encode(msgSend).finish()
+const msgSendAny = Any.fromPartial({
+  typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+  value: msgSendBytes
+})
+
+// 3. Wrap in MsgExec
+const execMsg = {
+  typeUrl: '/cosmos.authz.v1beta1.MsgExec',
+  value: {
+    grantee: sessionAddress,  // Session signer is grantee
+    msgs: [msgSendAny]        // Inner message(s)
+  }
+}
+
+// 4. Sign with session signer, use feegrant for fees
+const result = await sessionSigner.client.signAndBroadcast(
+  sessionAddress,  // Session signer signs
+  [execMsg],       // MsgExec wrapper
+  {
+    amount: [{ denom: 'uphoton', amount: '5000' }],
+    gas: '200000',
+    granter: primaryAddress  // Primary pays fees via feegrant
+  },
+  'Optional memo'
+)
+```
+
+### Debugging with Logging
+
+Enable comprehensive logging to debug session signer operations:
+
+```typescript
+import { newSessionSigner, consoleLogger } from 'stint-signer'
+
+// Enable logging during development
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger: consoleLogger  // Shows all debug, info, warn, error logs
+})
+
+// What you'll see in the console:
+// [Stint] Initializing session signer { saltName: 'my-app' }
+// [Stint] Starting passkey derivation { address: 'atone1...', saltName: 'my-app' }
+// [Stint] Session key ready
+// [Stint] Checking authz grant { messageType: '/cosmos.bank.v1beta1.MsgSend' }
+// [Stint] Found authz grant { hasExpiration: true }
+
+// Conditional logging based on environment
+const logger = process.env.NODE_ENV === 'development' ? consoleLogger : undefined
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  logger  // No logs in production
+})
+```
+
 ## API Reference
 
 ### Available Exports
@@ -184,9 +356,31 @@ import type {
   SessionSigner, 
   SessionSignerConfig, 
   DelegationConfig,
+  ExecuteHelpers,
   AuthzGrantInfo,
   FeegrantInfo
 } from 'stint-signer'
+```
+
+### Execute Helpers API
+
+The `execute` property provides simplified methods for common operations:
+
+```typescript
+// Send tokens with automatic MsgExec wrapping
+await sessionSigner.execute.send({
+  toAddress: string,
+  amount: Coin[],           // [{ denom: 'uphoton', amount: '1000' }]
+  memo?: string,            // Optional memo
+  fee?: StdFee | 'auto'     // Auto-includes granter for feegrant
+})
+
+// Execute custom messages (advanced)
+await sessionSigner.execute.custom({
+  messages: Any[],          // Pre-encoded protobuf messages
+  memo?: string,
+  fee?: StdFee | 'auto'
+})
 ```
 
 ### Session Signer Methods

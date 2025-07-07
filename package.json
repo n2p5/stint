@@ -1,6 +1,6 @@
 {
   "name": "stint-signer",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Short-lived, non-custodial session signer using passkeys for Cosmos SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
