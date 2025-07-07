@@ -26,25 +26,25 @@ Your main wallet stays secure, session signers are time-limited, and you can rev
 
 Perfect for apps that need frequent, small transactions:
 
-### 🌐 **Social Media dApps**
+### Social Media dApps
 
 - Post messages without wallet popups
 - Like/react to content instantly
 - Comment and interact seamlessly
 
-### 🎮 **Gaming & NFTs**
+### Gaming & NFTs
 
 - In-game transactions and trades
 - Achievement claims and rewards
 - Tournament entries
 
-### 🗳️ **DAOs & Governance**  
+### DAOs & Governance
 
 - Vote on multiple proposals
 - Delegate voting power
 - Submit proposals without friction
 
-### 💰 **Micro-payments**
+### Micro-payments
 
 - Content tips and donations
 - Subscription payments
