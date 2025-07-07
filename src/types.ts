@@ -1,5 +1,7 @@
 import { OfflineSigner, DirectSecp256k1Wallet, EncodeObject } from '@cosmjs/proto-signing'
-import { SigningStargateClient, GasPrice } from '@cosmjs/stargate'
+import { SigningStargateClient, GasPrice, DeliverTxResponse, StdFee } from '@cosmjs/stargate'
+import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
+import { Any } from 'cosmjs-types/google/protobuf/any'
 import { Logger } from './logger'
 
 // Extended interface for SigningStargateClient with internal properties
@@ -79,6 +81,29 @@ export interface FeegrantInfo {
   expiration?: Date
 }
 
+export interface ExecuteHelpers {
+  /**
+   * Send tokens using session signer with authz delegation
+   * Automatically wraps in MsgExec and handles feegrant
+   */
+  send(params: {
+    toAddress: string
+    amount: Coin[]
+    memo?: string
+    fee?: StdFee | 'auto'
+  }): Promise<DeliverTxResponse>
+
+  /**
+   * Execute custom messages with authz delegation
+   * For advanced use cases with pre-encoded Any messages
+   */
+  custom(params: {
+    messages: Any[]
+    memo?: string
+    fee?: StdFee | 'auto'
+  }): Promise<DeliverTxResponse>
+}
+
 export interface SessionSigner {
   primarySigner: OfflineSigner
   sessionSigner: DirectSecp256k1Wallet
@@ -96,4 +121,7 @@ export interface SessionSigner {
   generateDelegationMessages(config: DelegationConfig): EncodeObject[]
   generateConditionalDelegationMessages(config: DelegationConfig): Promise<EncodeObject[]>
   revokeDelegationMessages(msgTypeUrl?: string): EncodeObject[]
+
+  // Execute helpers for simplified authz transactions
+  execute: ExecuteHelpers
 }

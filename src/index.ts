@@ -1,8 +1,11 @@
 // Main function
 export { newSessionSigner } from './stint'
 
+// Execute helpers (can be used directly for testing/advanced usage)
+export { wrapInMsgExec, createFeeWithGranter, send, custom } from './execute'
+
 // Types
-export type { SessionSigner, SessionSignerConfig, DelegationConfig } from './types'
+export type { SessionSigner, SessionSignerConfig, DelegationConfig, ExecuteHelpers } from './types'
 
 // Error handling
 export { StintError, ErrorCodes } from './errors'
