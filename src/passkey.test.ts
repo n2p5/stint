@@ -338,7 +338,9 @@ describe('passkey utilities', () => {
             ({
               id: 'mock-credential-id',
               rawId: new ArrayBuffer(0),
-              response: {} as any,
+              response: {
+                userHandle: new TextEncoder().encode('atone1test123').buffer,
+              } as any,
               type: 'public-key' as const,
               authenticatorAttachment: null,
               getClientExtensionResults: () => ({

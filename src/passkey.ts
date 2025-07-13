@@ -191,7 +191,7 @@ interface ExistingCredential {
 
 // Check for existing passkey with PRF support
 async function getExistingPasskey(
-  _address: string,
+  address: string,
   saltName: string = 'stint-session',
   logger: Logger = noopLogger
 ): Promise<ExistingCredential | null> {
@@ -222,6 +222,23 @@ async function getExistingPasskey(
       return null
     }
 
+    // Validate that the passkey belongs to the expected address
+    const userHandle = (assertion.response as any).userHandle as ArrayBuffer | null
+    if (userHandle) {
+      const userIdFromPasskey = new TextDecoder().decode(userHandle)
+      if (userIdFromPasskey !== address) {
+        logger.debug('Passkey user ID does not match current address', {
+          expected: address,
+          actual: userIdFromPasskey,
+        })
+        return null
+      }
+    } else {
+      // If no userHandle is present, we can't validate the address
+      logger.debug('Passkey has no userHandle, cannot validate address')
+      return null
+    }
+
     // Check if PRF extension is supported and extract output
     const clientExtensionResults = assertion.getClientExtensionResults()
     const prfResult = clientExtensionResults.prf?.results?.first
@@ -246,9 +263,29 @@ async function getExistingPasskey(
       prfOutput,
     }
   } catch (error) {
-    logger.debug('No existing passkey found or user cancelled', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    })
+    if (error instanceof Error) {
+      // Check for specific WebAuthn errors that might indicate domain/credential issues
+      if (error.name === 'NotAllowedError') {
+        logger.debug('User cancelled passkey authentication or invalid credential for domain', {
+          error: error.message,
+          suggestion: 'This might be due to selecting a passkey from a different domain',
+        })
+      } else if (error.name === 'SecurityError') {
+        logger.debug('Security error during passkey authentication', {
+          error: error.message,
+          suggestion: 'This might be due to domain mismatch or invalid RP ID',
+        })
+      } else {
+        logger.debug('Passkey authentication failed', {
+          error: error.message,
+          errorType: error.name,
+        })
+      }
+    } else {
+      logger.debug('Unknown error during passkey authentication', {
+        error: 'Unknown error',
+      })
+    }
     return null
   }
 }
