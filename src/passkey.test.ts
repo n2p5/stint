@@ -51,7 +51,7 @@ describe('passkey utilities', () => {
         value: true,
         configurable: true,
       })
-      
+
       const mockGet = vi.fn().mockRejectedValue(new Error('Should not be called'))
       Object.defineProperty(navigator, 'credentials', {
         value: { get: mockGet },
@@ -73,12 +73,12 @@ describe('passkey utilities', () => {
       })
 
       setupWebAuthnMock({ prfSupported: true })
-      
+
       // Empty hostname should be allowed (returns empty string)
       const result = await getOrCreateDerivedKey({
         address: 'atone1test123',
       })
-      
+
       expect(result.credentialId).toBe('mock-credential-id')
     })
   })
@@ -294,12 +294,12 @@ describe('passkey utilities', () => {
 
     it('should handle PRF output as BufferSource type during getPasskeyPRF', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       // Create a buffer that implements BufferSource interface
       const buffer = new ArrayBuffer(32)
       const view = new Uint8Array(buffer)
       view.fill(200)
-      
+
       // First call finds existing credential with PRF support but will trigger second derivation call
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
@@ -317,7 +317,7 @@ describe('passkey utilities', () => {
           },
         }),
       } as any)
-      
+
       // Second call returns PRF result as BufferSource
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
@@ -345,10 +345,10 @@ describe('passkey utilities', () => {
 
     it('should handle PRF output as Uint8Array during getExistingPasskey', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       const uint8Array = new Uint8Array(32)
       uint8Array.fill(150)
-      
+
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
         rawId: new ArrayBuffer(0),
@@ -530,10 +530,10 @@ describe('passkey utilities', () => {
       it('should handle existing passkey requiring separate PRF derivation call', async () => {
         // Create a mock that simulates finding a credential with PRF support but no immediate output
         // This requires a more complex setup since the PRF detection logic is strict
-        
+
         const mockGet = vi.fn()
         const mockCreate = vi.fn()
-        
+
         // First call simulates finding existing credential with some PRF output (showing support)
         // but we'll use a different salt to force a derivation call
         mockGet.mockResolvedValueOnce({
@@ -552,10 +552,10 @@ describe('passkey utilities', () => {
             },
           }),
         } as any)
-        
+
         // Since we're using the same salt ('stint-session'), the first call will be used directly
         // To test the derivation path, we need to use a case where the salt differs
-        
+
         Object.defineProperty(navigator, 'credentials', {
           value: { get: mockGet, create: mockCreate },
           configurable: true,
@@ -624,7 +624,7 @@ describe('passkey utilities', () => {
         // that we know works: user cancellation during creation
         mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
         mockWebAuthn.mockGet.mockResolvedValueOnce(null) // No existing credential
-        
+
         const notAllowedError = new Error('User cancelled creation')
         notAllowedError.name = 'NotAllowedError'
         mockWebAuthn.mockCreate.mockRejectedValueOnce(notAllowedError)
@@ -640,7 +640,7 @@ describe('passkey utilities', () => {
         // Test a simpler scenario: user abort during creation
         mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
         mockWebAuthn.mockGet.mockResolvedValueOnce(null) // No existing credential
-        
+
         const abortError = new Error('User aborted creation')
         abortError.name = 'AbortError'
         mockWebAuthn.mockCreate.mockRejectedValueOnce(abortError)
@@ -655,7 +655,7 @@ describe('passkey utilities', () => {
       it('should handle timeout during authentication', async () => {
         // Test timeout error which is easier to mock
         mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-        
+
         const timeoutError = new Error('Operation timed out')
         timeoutError.name = 'TimeoutError'
         mockWebAuthn.mockGet.mockRejectedValueOnce(timeoutError)
@@ -664,7 +664,7 @@ describe('passkey utilities', () => {
         const result = await getOrCreateDerivedKey({
           address: 'atone1test123',
         })
-        
+
         expect(result.credentialId).toBe('mock-credential-id')
         expect(mockWebAuthn.mockCreate).toHaveBeenCalled()
       })
@@ -673,11 +673,11 @@ describe('passkey utilities', () => {
         mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
         mockWebAuthn.mockGet.mockRejectedValueOnce(new Error('Unknown error'))
         // Should continue to create new passkey
-        
+
         const result = await getOrCreateDerivedKey({
           address: 'atone1test123',
         })
-        
+
         expect(result.credentialId).toBe('mock-credential-id')
         expect(mockWebAuthn.mockCreate).toHaveBeenCalled()
       })
@@ -710,7 +710,7 @@ describe('passkey utilities', () => {
 
     it('should handle existing passkey with wrong user address', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       // Mock existing credential with different address
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
@@ -740,7 +740,7 @@ describe('passkey utilities', () => {
 
     it('should handle existing passkey with no userHandle', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       // Mock existing credential with no userHandle
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
@@ -798,11 +798,11 @@ describe('passkey utilities', () => {
 
     it('should handle PRF result as direct ArrayBuffer type', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       const arrayBuffer = new ArrayBuffer(32)
       const view = new Uint8Array(arrayBuffer)
       view.fill(42)
-      
+
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
         rawId: new ArrayBuffer(0),
@@ -830,7 +830,7 @@ describe('passkey utilities', () => {
 
     it('should handle network error when checking existing passkey', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       // Network error when checking existing passkey
       mockWebAuthn.mockGet.mockRejectedValueOnce(new Error('Network error'))
 
@@ -846,11 +846,11 @@ describe('passkey utilities', () => {
 
     it('should handle successful passkey authentication with different buffer types', async () => {
       const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-      
+
       // Test that we handle different buffer types correctly
       const arrayBuffer = new ArrayBuffer(32)
       new Uint8Array(arrayBuffer).fill(42)
-      
+
       mockWebAuthn.mockGet.mockResolvedValueOnce({
         id: 'mock-credential-id',
         rawId: new ArrayBuffer(0),
@@ -871,7 +871,7 @@ describe('passkey utilities', () => {
       const result = await getOrCreateDerivedKey({
         address: 'atone1test123',
       })
-      
+
       expect(result.credentialId).toBe('mock-credential-id')
       expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
     })
@@ -889,7 +889,7 @@ describe('passkey utilities', () => {
         address: 'atone1test123',
         logger: mockLogger,
       })
-      
+
       expect(result.credentialId).toBe('mock-credential-id')
       expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
       expect(mockLogger.debug).toHaveBeenCalled()

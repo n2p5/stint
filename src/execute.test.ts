@@ -465,10 +465,7 @@ describe('execute helpers', () => {
         })
       )
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        'Failed to execute custom messages',
-        error
-      )
+      expect(mockLogger.error).toHaveBeenCalledWith('Failed to execute custom messages', error)
     })
 
     it('should handle non-Error thrown during execution', async () => {
