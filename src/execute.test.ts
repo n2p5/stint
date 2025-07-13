@@ -444,6 +444,61 @@ describe('execute helpers', () => {
         '' // Empty memo
       )
     })
+
+    it('should handle generic error during signAndBroadcast', async () => {
+      const error = new Error('Network connection failed')
+      vi.mocked(mockSessionSigner.client.signAndBroadcast).mockRejectedValue(error)
+
+      const params = {
+        messages: [
+          Any.fromPartial({
+            typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+            value: new Uint8Array([1]),
+          }),
+        ],
+      }
+
+      await expect(custom(mockSessionSigner, params, mockLogger)).rejects.toThrow(
+        expect.objectContaining({
+          message: 'Failed to execute custom transaction',
+          code: ErrorCodes.CLIENT_INITIALIZATION_FAILED,
+        })
+      )
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Failed to execute custom messages',
+        error
+      )
+    })
+
+    it('should handle non-Error thrown during execution', async () => {
+      const errorString = 'String error message'
+      vi.mocked(mockSessionSigner.client.signAndBroadcast).mockRejectedValue(errorString)
+
+      const params = {
+        messages: [
+          Any.fromPartial({
+            typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+            value: new Uint8Array([1]),
+          }),
+        ],
+      }
+
+      await expect(custom(mockSessionSigner, params, mockLogger)).rejects.toThrow(
+        expect.objectContaining({
+          message: 'Failed to execute custom transaction',
+          code: ErrorCodes.CLIENT_INITIALIZATION_FAILED,
+          details: expect.objectContaining({
+            error: 'String error message',
+          }),
+        })
+      )
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Failed to execute custom messages',
+        errorString
+      )
+    })
   })
 
   describe('createExecuteHelpers', () => {
