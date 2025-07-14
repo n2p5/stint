@@ -1,12 +1,17 @@
 <script lang="ts">
   import { sessionStore } from '$lib/stores/session';
-  import { newSessionSigner, StintError, ErrorCodes, consoleLogger } from 'stint-signer';
+  import { newSessionSigner, StintError, ErrorCodes, consoleLogger, getWindowBoundaries } from 'stint-signer';
   import { SigningStargateClient, GasPrice } from '@cosmjs/stargate';
   import { RPC_URL } from '$lib/utils/wallets';
   
   let isCreating = false;
   let error = '';
   let status = '';
+  
+  // Window configuration options
+  let showAdvanced = false;
+  let stintWindowHours = 24; // Default 24 hours
+  let usePreviousWindow = false;
   
   async function createSession() {
     isCreating = true;
@@ -29,10 +34,12 @@
       
       status = 'Creating session signer with passkey...';
       
-      // Create session signer with consoleLogger from stint
+      // Create session signer with consoleLogger from stint and window configuration
       const sessionSigner = await newSessionSigner({
         primaryClient,
         saltName: 'stint-session',
+        stintWindowHours,
+        usePreviousWindow,
         logger: consoleLogger
       });
       
@@ -81,6 +88,34 @@
   function formatAddress(address: string): string {
     return `${address.slice(0, 10)}...${address.slice(-6)}`;
   }
+  
+  function formatTimeRemaining(ms: number): string {
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  }
+  
+  // Get current window information for display
+  function getWindowInfo() {
+    try {
+      const boundaries = getWindowBoundaries(stintWindowHours);
+      const now = Date.now();
+      const timeUntilNext = boundaries.end.getTime() - now;
+      return {
+        windowNumber: boundaries.windowNumber,
+        timeUntilNext: timeUntilNext > 0 ? timeUntilNext : 0,
+        windowStart: boundaries.start,
+        windowEnd: boundaries.end
+      };
+    } catch {
+      return null;
+    }
+  }
+  
+  $: windowInfo = getWindowInfo();
 </script>
 
 <div class="card bg-base-100 shadow-xl">
@@ -123,6 +158,60 @@
       <p class="text-base-content/70">
         Create a session signer using a Passkey. This signer will be able to transact on behalf of your primary address.
       </p>
+      
+      <!-- Advanced Window Configuration -->
+      <div class="collapse collapse-arrow bg-base-200">
+        <input type="checkbox" bind:checked={showAdvanced} />
+        <div class="collapse-title text-xl font-medium">
+          Advanced: Window-Based Key Rotation
+        </div>
+        <div class="collapse-content">
+          <div class="space-y-4">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Key Rotation Interval (hours)</span>
+                <span class="label-text-alt">Current: {stintWindowHours}h</span>
+              </label>
+              <select class="select select-bordered" bind:value={stintWindowHours}>
+                <option value={1}>1 hour (Maximum Security)</option>
+                <option value={8}>8 hours (High Security)</option>
+                <option value={24}>24 hours (Balanced - Default)</option>
+                <option value={168}>1 week (Convenience)</option>
+              </select>
+              <label class="label">
+                <span class="label-text-alt">Keys rotate automatically at these intervals for enhanced security</span>
+              </label>
+            </div>
+            
+            <div class="form-control">
+              <label class="label cursor-pointer">
+                <span class="label-text">Use Previous Window</span>
+                <input type="checkbox" class="checkbox" bind:checked={usePreviousWindow} />
+              </label>
+              <label class="label">
+                <span class="label-text-alt">Enable grace period by using the previous time window's keys</span>
+              </label>
+            </div>
+            
+            {#if windowInfo}
+              <div class="stats bg-primary text-primary-content">
+                <div class="stat">
+                  <div class="stat-title text-primary-content/70">Current Window</div>
+                  <div class="stat-value text-lg">#{windowInfo.windowNumber}</div>
+                  <div class="stat-desc text-primary-content/70">
+                    {usePreviousWindow ? `Using previous window #${windowInfo.windowNumber - 1}` : 'Using current window'}
+                  </div>
+                </div>
+                <div class="stat">
+                  <div class="stat-title text-primary-content/70">Time Until Next</div>
+                  <div class="stat-value text-lg">{formatTimeRemaining(windowInfo.timeUntilNext)}</div>
+                  <div class="stat-desc text-primary-content/70">Key rotates automatically</div>
+                </div>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
       
       {#if status}
         <div class="alert alert-info">

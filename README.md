@@ -115,9 +115,11 @@ The demo shows how to:
 import { newSessionSigner } from 'stint-signer'
 
 const sessionSigner = await newSessionSigner({
-  primaryClient,              // Your SigningStargateClient
-  saltName?: 'my-app',       // Optional: isolate different apps
-  logger?: consoleLogger     // Optional: enable debug logs
+  primaryClient,                    // Your SigningStargateClient
+  saltName?: 'my-app',             // Optional: isolate different apps
+  stintWindowHours?: 24,           // Optional: key rotation interval (default: 24 hours)
+  usePreviousWindow?: false,       // Optional: use previous time window for grace period
+  logger?: consoleLogger           // Optional: enable debug logs
 })
 ```
 
@@ -157,11 +159,54 @@ const hasGasAllowance = await sessionSigner.hasFeegrant()
 
 🎯 **[Example App](./examples/dither-post-demo)** - Full working demo with Dither social network
 
+## Advanced Configuration
+
+### Window-Based Key Rotation
+
+Stint implements automatic key rotation using time-based windows for enhanced security:
+
+```typescript
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  saltName: 'my-app',
+  
+  // Key rotates every 8 hours for high-security apps
+  stintWindowHours: 8,
+  
+  // Use previous window during transitions to avoid interruptions
+  usePreviousWindow: false,
+})
+```
+
+**Window Configuration Options:**
+
+- `stintWindowHours: 1` - Hourly rotation (maximum security)
+- `stintWindowHours: 8` - 8-hour rotation (high security)  
+- `stintWindowHours: 24` - Daily rotation (default, balanced)
+- `stintWindowHours: 168` - Weekly rotation (convenience)
+
+**Grace Period Usage:**
+
+When users might be near a window boundary, use `usePreviousWindow: true` to access the previous time window's keys, ensuring uninterrupted access during transitions.
+
+### Debugging Window Boundaries
+
+```typescript
+import { getWindowBoundaries } from 'stint-signer'
+
+const boundaries = getWindowBoundaries(24) // 24-hour windows
+console.log('Current window:', boundaries.windowNumber)
+console.log('Window start:', boundaries.start)
+console.log('Window end:', boundaries.end)
+```
+
 ## Key Features
 
 ✅ **Zero-balance signers** - Session signers never hold funds
 
 ✅ **Passkey security** - Uses device biometrics for key derivation
+
+✅ **Automatic key rotation** - Time-windowed keys rotate automatically
 
 ✅ **Time-limited** - Sessions expire automatically
 

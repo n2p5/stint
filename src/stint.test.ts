@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { dateToTimestamp, newSessionSigner, convertRpcToRestUrl } from './stint'
 import { DirectSecp256k1Wallet } from '@cosmjs/proto-signing'
 import { SigningStargateClient } from '@cosmjs/stargate'
@@ -750,6 +750,364 @@ describe('SessionSigner methods', () => {
 
         const result = await signer.hasFeegrant()
         expect(result).toEqual(expectedResult)
+      })
+    })
+  })
+
+  describe('window-based session signer configuration', () => {
+    let mockPrimaryClient: SigningStargateClient
+    let originalDateNow: typeof Date.now
+
+    beforeEach(async () => {
+      originalDateNow = Date.now
+      
+      // Create mock primary client
+      mockPrimaryClient = {
+        signer: {
+          getAccounts: vi
+            .fn()
+            .mockResolvedValue([
+              { address: 'atone1primary123', algo: 'secp256k1', pubkey: new Uint8Array() },
+            ]),
+        },
+        cometClient: {
+          client: {
+            url: 'http://localhost:26657',
+          },
+        },
+        gasPrice: { amount: '0.025', denom: 'uphoton' },
+      } as unknown as SigningStargateClient
+
+      // Mock DirectSecp256k1Wallet.fromKey
+      vi.spyOn(DirectSecp256k1Wallet, 'fromKey').mockResolvedValue({
+        getAccounts: vi
+          .fn()
+          .mockResolvedValue([
+            { address: 'atone1session456', algo: 'secp256k1', pubkey: new Uint8Array() },
+          ]),
+      } as unknown as DirectSecp256k1Wallet)
+
+      // Mock SigningStargateClient.connectWithSigner
+      vi.spyOn(SigningStargateClient, 'connectWithSigner').mockResolvedValue({
+        cometClient: {
+          client: {
+            url: 'http://localhost:26657',
+          },
+        },
+      } as unknown as SigningStargateClient)
+    })
+
+    afterEach(() => {
+      Date.now = originalDateNow
+      vi.clearAllMocks()
+    })
+
+    describe('usePreviousWindow flag', () => {
+      // Table-driven tests for window selection scenarios
+      const windowSelectionTestCases = [
+        {
+          name: 'current window when usePreviousWindow is false',
+          timestamp: 50 * 60 * 60 * 1000, // 50 hours = 2 full 24h windows + 2 hours
+          windowHours: 24,
+          usePreviousWindow: false,
+          expectedWindowNumber: 2,
+          description: 'Should select current window by default',
+        },
+        {
+          name: 'previous window when usePreviousWindow is true',
+          timestamp: 50 * 60 * 60 * 1000, // 50 hours = 2 full 24h windows + 2 hours
+          windowHours: 24,
+          usePreviousWindow: true,
+          expectedWindowNumber: 1,
+          description: 'Should select previous window for grace period',
+        },
+        {
+          name: 'current window with 8-hour windows',
+          timestamp: 25 * 60 * 60 * 1000, // 25 hours = 3 full 8h windows + 1 hour
+          windowHours: 8,
+          usePreviousWindow: false,
+          expectedWindowNumber: 3,
+          description: 'Should work with non-standard window sizes',
+        },
+        {
+          name: 'previous window with 8-hour windows',
+          timestamp: 25 * 60 * 60 * 1000, // 25 hours = 3 full 8h windows + 1 hour
+          windowHours: 8,
+          usePreviousWindow: true,
+          expectedWindowNumber: 2,
+          description: 'Grace period should work with any window size',
+        },
+        {
+          name: 'current window with odd-sized windows',
+          timestamp: 118 * 60 * 60 * 1000, // 118 hours = 3 full 39h windows + 1 hour
+          windowHours: 39,
+          usePreviousWindow: false,
+          expectedWindowNumber: 3,
+          description: 'Should handle arbitrary window sizes correctly',
+        },
+        {
+          name: 'previous window with odd-sized windows',
+          timestamp: 118 * 60 * 60 * 1000, // 118 hours = 3 full 39h windows + 1 hour
+          windowHours: 39,
+          usePreviousWindow: true,
+          expectedWindowNumber: 2,
+          description: 'Grace period should work with odd window sizes',
+        },
+        {
+          name: 'at window boundary - current',
+          timestamp: 24 * 60 * 60 * 1000, // Exactly at 24h boundary
+          windowHours: 24,
+          usePreviousWindow: false,
+          expectedWindowNumber: 1,
+          description: 'Should select correct window at exact boundary',
+        },
+        {
+          name: 'at window boundary - previous',
+          timestamp: 24 * 60 * 60 * 1000, // Exactly at 24h boundary
+          windowHours: 24,
+          usePreviousWindow: true,
+          expectedWindowNumber: 0,
+          description: 'Grace period should work at window boundaries',
+        },
+      ]
+
+      windowSelectionTestCases.forEach(({ 
+        name, 
+        timestamp, 
+        windowHours, 
+        usePreviousWindow, 
+        expectedWindowNumber, 
+        description 
+      }) => {
+        it(`should handle ${name}`, async () => {
+          // Mock Date.now to return our test timestamp
+          Date.now = vi.fn().mockReturnValue(timestamp)
+
+          // Track which window number is actually used in the passkey derivation
+          let actualWindowNumber: number | undefined
+          
+          // Mock getOrCreateDerivedKey to capture the window number
+          const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
+          mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+            actualWindowNumber = config.windowNumber
+            return {
+              credentialId: 'mock-credential-id',
+              privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            }
+          })
+
+          // Create session signer with the specified configuration
+          await newSessionSigner({
+            primaryClient: mockPrimaryClient,
+            saltName: 'test-salt',
+            stintWindowHours: windowHours,
+            usePreviousWindow: usePreviousWindow,
+          })
+
+          // Verify the correct window number was passed to passkey derivation
+          expect(actualWindowNumber).toBe(expectedWindowNumber)
+          
+          // Verify getOrCreateDerivedKey was called with the expected config
+          expect(mockGetOrCreateDerivedKey).toHaveBeenCalledWith(
+            expect.objectContaining({
+              stintWindowHours: windowHours,
+              windowNumber: expectedWindowNumber,
+            })
+          )
+          
+          // Log description for documentation
+          expect(description).toBeDefined()
+        })
+      })
+
+      it('should default to current window when usePreviousWindow not specified', async () => {
+        const timestamp = 72 * 60 * 60 * 1000 // 72 hours = 3 full 24h windows
+        Date.now = vi.fn().mockReturnValue(timestamp)
+
+        let actualWindowNumber: number | undefined
+        
+        const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
+        mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+          actualWindowNumber = config.windowNumber
+          return {
+            credentialId: 'mock-credential-id',
+            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          }
+        })
+
+        await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          saltName: 'test-salt',
+          stintWindowHours: 24,
+          // usePreviousWindow not specified, should default to false
+        })
+
+        // Should use current window (3) not previous window (2)
+        const expectedCurrentWindow = 3
+        expect(actualWindowNumber).toBe(expectedCurrentWindow)
+      })
+
+      it('should handle edge case where previous window would be negative', async () => {
+        // Test early timestamp where previous window would be -1
+        const timestamp = 1000 // Very early timestamp, current window = 0
+        Date.now = vi.fn().mockReturnValue(timestamp)
+
+        let actualWindowNumber: number | undefined
+        
+        const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
+        mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+          actualWindowNumber = config.windowNumber
+          return {
+            credentialId: 'mock-credential-id',
+            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          }
+        })
+
+        await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          saltName: 'test-salt',
+          stintWindowHours: 24,
+          usePreviousWindow: true,
+        })
+
+        // Previous window of 0 should be -1
+        expect(actualWindowNumber).toBe(-1)
+      })
+    })
+
+    describe('stintWindowHours configuration', () => {
+      // Table-driven tests for different window hour values
+      const windowHoursTestCases = [
+        {
+          name: 'default 24 hours when not specified',
+          stintWindowHours: undefined,
+          expectedWindowHours: 24,
+          description: 'Should use 24-hour default',
+        },
+        {
+          name: '8 hour windows',
+          stintWindowHours: 8,
+          expectedWindowHours: 8,
+          description: 'Shorter windows for higher security rotation',
+        },
+        {
+          name: '48 hour windows',
+          stintWindowHours: 48,
+          expectedWindowHours: 48,
+          description: 'Extended windows for convenience',
+        },
+        {
+          name: '1 hour windows',
+          stintWindowHours: 1,
+          expectedWindowHours: 1,
+          description: 'Hourly rotation for maximum security',
+        },
+        {
+          name: '168 hour windows (1 week)',
+          stintWindowHours: 168,
+          expectedWindowHours: 168,
+          description: 'Weekly rotation for long-term sessions',
+        },
+        {
+          name: '39 hour windows (odd number)',
+          stintWindowHours: 39,
+          expectedWindowHours: 39,
+          description: 'Non-standard intervals should work correctly',
+        },
+      ]
+
+      windowHoursTestCases.forEach(({ name, stintWindowHours, expectedWindowHours, description }) => {
+        it(`should handle ${name}`, async () => {
+          let actualStintWindowHours: number | undefined
+          
+          const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
+          mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+            actualStintWindowHours = config.stintWindowHours
+            return {
+              credentialId: 'mock-credential-id',
+              privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            }
+          })
+
+          await newSessionSigner({
+            primaryClient: mockPrimaryClient,
+            saltName: 'test-salt',
+            stintWindowHours: stintWindowHours,
+          })
+
+          expect(actualStintWindowHours).toBe(expectedWindowHours)
+          expect(description).toBeDefined()
+        })
+      })
+    })
+
+    describe('window calculation consistency', () => {
+      it('should produce same window number for same timestamp and config', async () => {
+        const timestamp = 100 * 60 * 60 * 1000 // 100 hours
+        Date.now = vi.fn().mockReturnValue(timestamp)
+
+        const capturedConfigs: any[] = []
+        
+        const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
+        mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+          capturedConfigs.push(config)
+          return {
+            credentialId: 'mock-credential-id',
+            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          }
+        })
+
+        // Create multiple signers with same config
+        await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          stintWindowHours: 24,
+          usePreviousWindow: false,
+        })
+
+        await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          stintWindowHours: 24,
+          usePreviousWindow: false,
+        })
+
+        // Should have same window number for both calls
+        expect(capturedConfigs).toHaveLength(2)
+        expect(capturedConfigs[0].windowNumber).toBe(capturedConfigs[1].windowNumber)
+        expect(capturedConfigs[0].stintWindowHours).toBe(capturedConfigs[1].stintWindowHours)
+      })
+
+      it('should produce different window numbers for different usePreviousWindow settings', async () => {
+        const timestamp = 100 * 60 * 60 * 1000 // 100 hours
+        Date.now = vi.fn().mockReturnValue(timestamp)
+
+        const capturedConfigs: any[] = []
+        
+        const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
+        mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+          capturedConfigs.push(config)
+          return {
+            credentialId: 'mock-credential-id',
+            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          }
+        })
+
+        // Current window
+        await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          stintWindowHours: 24,
+          usePreviousWindow: false,
+        })
+
+        // Previous window
+        await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          stintWindowHours: 24,
+          usePreviousWindow: true,
+        })
+
+        // Should have different window numbers
+        expect(capturedConfigs).toHaveLength(2)
+        expect(capturedConfigs[0].windowNumber).toBe(capturedConfigs[1].windowNumber + 1)
       })
     })
   })

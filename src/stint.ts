@@ -23,6 +23,7 @@ import { createExecuteHelpers } from './execute'
 // SESSION SIGNER CREATION
 // ============================================================================
 
+
 /**
  * Create a complete session signer in one step
  * Combines passkey creation, signer derivation, and chain connection
@@ -54,11 +55,26 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
   // Extract prefix from primary address (e.g., 'atone' from 'atone1...')
   const prefix = primaryAddress.match(/^([a-z]+)1/)?.[1] || 'atom'
 
-  // Get or create derived key for this primary address
+  // Calculate window number based on simple selection
+  const windowHours = config.stintWindowHours || 24
+  const now = Date.now()
+  const windowMs = windowHours * 60 * 60 * 1000
+  const currentWindow = Math.floor(now / windowMs)
+  const windowNumber = config.usePreviousWindow ? currentWindow - 1 : currentWindow
+
+  logger.debug('Creating session signer', {
+    windowNumber,
+    windowHours,
+    usePreviousWindow: config.usePreviousWindow || false,
+  })
+
+  // Get or create derived key for selected window
   const derivedKey = await getOrCreateDerivedKey({
     address: primaryAddress,
     displayName: `Stint: ${primaryAddress.slice(0, 10)}...`,
     saltName: config.saltName || 'stint-session',
+    stintWindowHours: windowHours,
+    windowNumber,
     logger,
   })
 
