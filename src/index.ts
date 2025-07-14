@@ -4,6 +4,9 @@ export { newSessionSigner } from './stint'
 // Execute helpers (can be used directly for testing/advanced usage)
 export { wrapInMsgExec, createFeeWithGranter, send, custom } from './execute'
 
+// Window utilities (for debugging and validation)
+export { getWindowBoundaries } from './passkey'
+
 // Types
 export type { SessionSigner, SessionSignerConfig, DelegationConfig, ExecuteHelpers } from './types'
 

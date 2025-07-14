@@ -343,7 +343,7 @@ const sessionSigner = await newSessionSigner({
 
 ```typescript
 // Main functions
-import { newSessionSigner } from 'stint-signer'
+import { newSessionSigner, getWindowBoundaries } from 'stint-signer'
 
 // Error handling  
 import { StintError, ErrorCodes, type ErrorCode } from 'stint-signer'
@@ -637,6 +637,143 @@ try {
 ```
 
 ## Advanced Configuration
+
+### Window-Based Key Rotation
+
+Stint implements automatic key rotation using time-based windows for enhanced security. This feature ensures that session signers automatically derive new private keys at regular intervals, limiting the impact of potential key compromise.
+
+#### How Time Windows Work
+
+Time windows are calculated using Unix epoch timestamps, ensuring deterministic key generation across different devices and sessions:
+
+```typescript
+// Create session signer with custom window settings
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  saltName: 'my-app',
+  
+  // Key rotates every 8 hours for high-security applications
+  stintWindowHours: 8,
+  
+  // Use previous window during transitions to avoid interruptions
+  usePreviousWindow: false,
+})
+```
+
+#### Window Configuration Options
+
+Choose the rotation frequency based on your security requirements:
+
+```typescript
+// Maximum security - hourly rotation
+const hourlyRotation = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 1,  // New key every hour
+})
+
+// High security - 8-hour rotation  
+const eightHourRotation = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 8,  // New key every 8 hours
+})
+
+// Balanced security - daily rotation (default)
+const dailyRotation = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 24, // New key every 24 hours (default)
+})
+
+// Convenience - weekly rotation
+const weeklyRotation = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 168, // New key every week
+})
+```
+
+#### Grace Period During Window Transitions
+
+When users might be near a window boundary, use `usePreviousWindow: true` to access the previous time window's keys:
+
+```typescript
+// Check if we're near a window boundary
+import { getWindowBoundaries } from 'stint-signer'
+
+const boundaries = getWindowBoundaries(24) // 24-hour windows
+const now = Date.now()
+const timeUntilNextWindow = boundaries.end.getTime() - now
+const oneHourMs = 60 * 60 * 1000
+
+// If less than 1 hour until next window, use previous window for stability
+const usePreviousWindow = timeUntilNextWindow < oneHourMs
+
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 24,
+  usePreviousWindow, // Use previous window during transition periods
+})
+```
+
+#### Debugging Window Boundaries
+
+Use the `getWindowBoundaries` utility to inspect current window information:
+
+```typescript
+import { getWindowBoundaries } from 'stint-signer'
+
+// Get current window information
+const boundaries = getWindowBoundaries(24) // 24-hour windows
+
+console.log('Window details:', {
+  windowNumber: boundaries.windowNumber,
+  start: boundaries.start.toISOString(),
+  end: boundaries.end.toISOString(),
+  timeRemaining: boundaries.end.getTime() - Date.now()
+})
+
+// Test different window sizes
+const hourlyBounds = getWindowBoundaries(1)    // Hourly windows
+const weeklyBounds = getWindowBoundaries(168)  // Weekly windows
+```
+
+#### Window-Based Authorization Strategy
+
+With automatic key rotation, you may need to adjust your authorization strategy:
+
+```typescript
+// Strategy 1: Shorter authorizations aligned with key rotation
+const sessionSigner = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 8, // 8-hour key rotation
+})
+
+// Set authorization to expire with the key rotation
+const authMessages = sessionSigner.generateDelegationMessages({
+  sessionExpiration: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8 hours to match window
+  spendLimit: { denom: 'uphoton', amount: '1000000' },
+  gasLimit: { denom: 'uphoton', amount: '500000' },
+})
+
+// Strategy 2: Longer authorizations with key rotation for added security
+const longerSessionSigner = await newSessionSigner({
+  primaryClient,
+  stintWindowHours: 24, // Daily key rotation
+})
+
+// Authorization lasts longer than key rotation for convenience
+const longerAuthMessages = longerSessionSigner.generateDelegationMessages({
+  sessionExpiration: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week
+  spendLimit: { denom: 'uphoton', amount: '5000000' },
+  gasLimit: { denom: 'uphoton', amount: '2000000' },
+})
+```
+
+#### Security Benefits of Window-Based Rotation
+
+- **Limited key lifetime**: Even if a key is compromised, it's only valid for the current window
+- **Automatic rotation**: No manual intervention required for key updates
+- **Deterministic**: Same device will always generate the same key for a given window
+- **Backward compatibility**: Previous window access allows for graceful transitions
+- **Configurable**: Adjust rotation frequency based on security requirements
 
 ### Custom Salt Names for Isolation
 

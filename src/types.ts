@@ -55,6 +55,8 @@ export interface StintConfig {
 export interface SessionSignerConfig {
   primaryClient: SigningStargateClient
   saltName?: string
+  stintWindowHours?: number // Time window in hours for key validity (default: 24, supports any duration)
+  usePreviousWindow?: boolean // Use previous window instead of current (default: false)
   logger?: Logger
 }
 

@@ -1,4 +1,3 @@
-import { sha256 } from '@cosmjs/crypto'
 import { toHex, fromBase64 } from '@cosmjs/encoding'
 import { PublicKeyCredentialWithPRF } from './types'
 import { StintError, ErrorCodes } from './errors'
@@ -7,6 +6,47 @@ import { Logger, noopLogger } from './logger'
 // ============================================================================
 // SECURITY UTILITIES
 // ============================================================================
+
+/**
+ * Generate time-windowed stint salt for PRF and HKDF
+ * Creates unique salt based on domain, user, purpose, and UTC time window
+ * Uses Unix epoch-based calculation to handle arbitrary window sizes
+ */
+function generateStintSalt(
+  userAddress: string,
+  purpose: string,
+  windowHours: number = 24,
+  windowNumber?: number
+): string {
+  // Use UTC milliseconds since Unix epoch for global synchronization
+  const now = Date.now()
+  const windowMs = windowHours * 60 * 60 * 1000
+  const calculatedWindowNumber = windowNumber ?? Math.floor(now / windowMs)
+
+  const domain = window.location.hostname
+  return `${domain}:${userAddress}:${purpose}:${calculatedWindowNumber}`
+}
+
+/**
+ * Get the current window boundaries for debugging and validation
+ * @param windowHours The window size in hours
+ * @returns Object with start and end timestamps of current window
+ */
+export function getWindowBoundaries(windowHours: number = 24): {
+  start: Date
+  end: Date
+  windowNumber: number
+} {
+  const now = Date.now()
+  const windowMs = windowHours * 60 * 60 * 1000
+  const windowNumber = Math.floor(now / windowMs)
+
+  return {
+    start: new Date(windowNumber * windowMs),
+    end: new Date((windowNumber + 1) * windowMs),
+    windowNumber,
+  }
+}
 
 /**
  * Validate and get secure RP ID
@@ -48,6 +88,37 @@ function generateSecureChallenge(): Uint8Array {
   return challenge
 }
 
+/**
+ * HKDF-SHA256 key derivation function using WebCrypto API
+ * @param ikm Input Key Material (PRF output)
+ * @param salt Salt for extraction phase
+ * @param info Context information for expansion
+ * @param length Output length in bytes
+ */
+async function hkdf(
+  ikm: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array,
+  length: number
+): Promise<Uint8Array> {
+  // Import the input key material
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits'])
+
+  // Derive bits using HKDF-SHA256
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: salt,
+      info: info,
+    },
+    key,
+    length * 8 // Convert bytes to bits
+  )
+
+  return new Uint8Array(derivedBits)
+}
+
 // Public interfaces
 export interface DerivedKey {
   credentialId: string
@@ -58,6 +129,8 @@ export interface PasskeyConfig {
   address: string // Cosmos address as userID
   displayName?: string // Optional display name
   saltName?: string // Salt for key derivation (default: 'stint-session')
+  stintWindowHours?: number // Time window in hours for key validity (default: 24, supports any duration)
+  windowNumber?: number // Specific window number to use (optional, for grace period logic)
   logger?: Logger // Optional logger
 }
 
@@ -69,10 +142,17 @@ export interface PasskeyConfig {
  */
 export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<DerivedKey> {
   const logger = options.logger || noopLogger
+  const purpose = options.saltName || 'stint-session'
+  const windowHours = options.stintWindowHours || 24
+
+  // Generate time-windowed stint salt
+  const stintSalt = generateStintSalt(options.address, purpose, windowHours, options.windowNumber)
 
   logger.debug('Starting passkey derivation', {
     address: options.address.slice(0, 10) + '...',
-    saltName: options.saltName,
+    purpose,
+    windowHours,
+    stintSalt,
   })
 
   if (!window.PublicKeyCredential) {
@@ -86,11 +166,7 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
   let existingCredential: ExistingCredential | null = null
 
   try {
-    existingCredential = await getExistingPasskey(
-      options.address,
-      options.saltName || 'stint-session',
-      logger
-    )
+    existingCredential = await getExistingPasskey(options.address, stintSalt, logger)
   } catch (error) {
     // If user cancelled during existing passkey check, don't proceed to create
     if (
@@ -107,15 +183,17 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
     logger.debug('No existing passkey found, will create new one')
   }
 
-  const saltName = options.saltName || 'stint-session'
-
   // If we found an existing credential, try to use it
   if (existingCredential) {
     logger.debug('Found existing passkey')
 
     if (existingCredential.prfSupported && existingCredential.prfOutput) {
-      // Use the PRF output we already got to derive the private key
-      const privateKey = sha256(existingCredential.prfOutput)
+      // Use the PRF output we already got to derive the private key with HKDF
+      const privateKey = await derivePrivateKeyWithHKDF(
+        existingCredential.prfOutput,
+        stintSalt,
+        logger
+      )
       logger.debug('Session key ready')
       return {
         credentialId: existingCredential.credentialId,
@@ -123,7 +201,11 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
       }
     } else if (existingCredential.prfSupported) {
       try {
-        const privateKey = await derivePrivateKey(existingCredential.credentialId, saltName, logger)
+        const privateKey = await derivePrivateKey(
+          existingCredential.credentialId,
+          stintSalt,
+          logger
+        )
         logger.debug('Session key ready')
         return {
           credentialId: existingCredential.credentialId,
@@ -168,7 +250,7 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
     logger
   )
 
-  const privateKey = await derivePrivateKey(credential.id, saltName, logger)
+  const privateKey = await derivePrivateKey(credential.id, stintSalt, logger)
 
   logger.debug('Session key ready')
   return {
@@ -192,11 +274,10 @@ interface ExistingCredential {
 // Check for existing passkey with PRF support
 async function getExistingPasskey(
   address: string,
-  saltName: string = 'stint-session',
+  stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<ExistingCredential | null> {
   const challenge = generateSecureChallenge()
-  const saltBytes = new TextEncoder().encode(saltName)
 
   try {
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
@@ -208,7 +289,8 @@ async function getExistingPasskey(
       extensions: {
         prf: {
           eval: {
-            first: saltBytes,
+            first: new TextEncoder().encode(stintSalt + '\x00'),
+            second: new TextEncoder().encode(stintSalt + '\x01'),
           },
         },
       },
@@ -241,20 +323,42 @@ async function getExistingPasskey(
 
     // Check if PRF extension is supported and extract output
     const clientExtensionResults = assertion.getClientExtensionResults()
-    const prfResult = clientExtensionResults.prf?.results?.first
-    const prfSupported = !!prfResult
+    const prfResult1 = clientExtensionResults.prf?.results?.first
+    const prfResult2 = clientExtensionResults.prf?.results?.second
+    const prfSupported = !!prfResult1
 
     let prfOutput: Uint8Array | undefined
-    if (prfResult) {
-      // Handle different possible return types from PRF
-      if (prfResult instanceof ArrayBuffer) {
-        prfOutput = new Uint8Array(prfResult)
-      } else if (prfResult instanceof Uint8Array) {
-        prfOutput = prfResult
+    if (prfResult1) {
+      // Convert first result to Uint8Array
+      let output1: Uint8Array
+      if (prfResult1 instanceof ArrayBuffer) {
+        output1 = new Uint8Array(prfResult1)
+      } else if (prfResult1 instanceof Uint8Array) {
+        output1 = prfResult1
       } else {
-        // Handle BufferSource types
-        prfOutput = new Uint8Array(prfResult as ArrayBuffer)
+        output1 = new Uint8Array(prfResult1 as ArrayBuffer)
       }
+
+      // Convert second result to Uint8Array (if available)
+      let output2: Uint8Array
+      if (prfResult2) {
+        if (prfResult2 instanceof ArrayBuffer) {
+          output2 = new Uint8Array(prfResult2)
+        } else if (prfResult2 instanceof Uint8Array) {
+          output2 = prfResult2
+        } else {
+          output2 = new Uint8Array(prfResult2 as ArrayBuffer)
+        }
+      } else {
+        // If second output is not available, use first output again
+        output2 = output1
+      }
+
+      // Combine both outputs for maximum entropy
+      const combinedOutput = new Uint8Array(output1.length + output2.length)
+      combinedOutput.set(output1)
+      combinedOutput.set(output2, output1.length)
+      prfOutput = combinedOutput
     }
 
     return {
@@ -368,7 +472,7 @@ function base64urlToBytes(base64url: string): Uint8Array {
 // Get PRF output from passkey
 async function getPasskeyPRF(
   credentialId: string,
-  salt: Uint8Array,
+  stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<Uint8Array> {
   const challenge = generateSecureChallenge()
@@ -388,7 +492,8 @@ async function getPasskeyPRF(
     extensions: {
       prf: {
         eval: {
-          first: salt,
+          first: new TextEncoder().encode(stintSalt + '\x00'),
+          second: new TextEncoder().encode(stintSalt + '\x01'),
         },
       },
     },
@@ -416,30 +521,68 @@ async function getPasskeyPRF(
     })
   }
 
-  // Handle different possible return types from PRF
-  const prfResult = clientExtensionResults.prf.results.first
-  if (prfResult instanceof ArrayBuffer) {
-    return new Uint8Array(prfResult)
-  } else if (prfResult instanceof Uint8Array) {
-    return prfResult
+  // Handle different possible return types from PRF and combine both outputs
+  const prfResult1 = clientExtensionResults.prf.results.first
+  const prfResult2 = clientExtensionResults.prf.results.second
+
+  // Convert first result to Uint8Array
+  let output1: Uint8Array
+  if (prfResult1 instanceof ArrayBuffer) {
+    output1 = new Uint8Array(prfResult1)
+  } else if (prfResult1 instanceof Uint8Array) {
+    output1 = prfResult1
   } else {
-    // Handle BufferSource types
-    return new Uint8Array(prfResult as ArrayBuffer)
+    output1 = new Uint8Array(prfResult1 as ArrayBuffer)
   }
+
+  // Convert second result to Uint8Array (if available)
+  let output2: Uint8Array
+  if (prfResult2) {
+    if (prfResult2 instanceof ArrayBuffer) {
+      output2 = new Uint8Array(prfResult2)
+    } else if (prfResult2 instanceof Uint8Array) {
+      output2 = prfResult2
+    } else {
+      output2 = new Uint8Array(prfResult2 as ArrayBuffer)
+    }
+  } else {
+    // If second output is not available, use first output again
+    output2 = output1
+  }
+
+  // Combine both outputs for maximum entropy
+  const combinedOutput = new Uint8Array(output1.length + output2.length)
+  combinedOutput.set(output1)
+  combinedOutput.set(output2, output1.length)
+
+  return combinedOutput
+}
+
+// Derive a private key using HKDF from PRF output
+async function derivePrivateKeyWithHKDF(
+  prfOutput: Uint8Array,
+  stintSalt: string,
+  _logger: Logger = noopLogger
+): Promise<Uint8Array> {
+  const saltBytes = new TextEncoder().encode(stintSalt)
+  const infoBytes = new TextEncoder().encode('stint-key-derivation')
+
+  // Use HKDF to derive the private key
+  const privateKey = await hkdf(prfOutput, saltBytes, infoBytes, 32)
+
+  return privateKey
 }
 
 // Derive a private key from passkey PRF output
 async function derivePrivateKey(
   credentialId: string,
-  salt: string = 'stint-session',
+  stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<string> {
-  const saltBytes = new TextEncoder().encode(salt)
+  const prfOutput = await getPasskeyPRF(credentialId, stintSalt, logger)
 
-  const prfOutput = await getPasskeyPRF(credentialId, saltBytes, logger)
-
-  // Use the PRF output as entropy for the private key
-  const privateKey = sha256(prfOutput)
+  // Use HKDF to derive the private key
+  const privateKey = await derivePrivateKeyWithHKDF(prfOutput, stintSalt, logger)
 
   return toHex(privateKey)
 }

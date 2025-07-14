@@ -15,6 +15,7 @@ A clean, modern demo of Stint session signers built with SvelteKit and DaisyUI. 
 - 📱 **Responsive Design** that works on desktop and mobile
 - 🔧 **Type Safety** with full TypeScript support
 - ⚡ **Fast Development** with SvelteKit hot reload
+- 🔐 **Window-Based Key Rotation** for enhanced security with configurable intervals
 
 ## Getting Started
 
@@ -35,6 +36,7 @@ A clean, modern demo of Stint session signers built with SvelteKit and DaisyUI. 
 
 1. **Connect Wallet** - Connect Keplr, Leap, or Cosmostation
 2. **Create Session Signer** - Generate a session signer using your device's biometrics (Passkey)
+   - **Optional**: Configure advanced window-based key rotation settings for enhanced security
 3. **Set Up Permissions** - Authorize the session signer to post on your behalf (one-time setup)
 4. **Post Instantly** - Post messages to Dither without wallet popups!
 
@@ -68,6 +70,23 @@ await sessionSigner.execute.send({
 3. Signs with session signer
 4. Uses feegrant for gas fees
 5. Transfers funds from your primary wallet
+
+### Window-Based Key Rotation
+
+This demo showcases Stint's advanced security feature - automatic key rotation using time-based windows:
+
+- **Configurable Intervals**: Choose from 1 hour (maximum security) to 1 week (convenience)
+- **Automatic Rotation**: Keys rotate deterministically based on UTC time windows
+- **Grace Period**: Option to use previous window keys during transitions
+- **Real-time Display**: See current window number and time until next rotation
+
+The demo includes an advanced configuration panel where you can:
+
+1. **Select rotation interval** (1h, 8h, 24h, 1 week)
+2. **Enable grace period** with "Use Previous Window" option
+3. **View current window status** including time remaining
+
+This provides an additional security layer - even if a session key is compromised, it's only valid for the current time window.
 
 ## Project Structure
 
