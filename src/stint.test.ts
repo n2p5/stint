@@ -760,7 +760,7 @@ describe('SessionSigner methods', () => {
 
     beforeEach(async () => {
       originalDateNow = Date.now
-      
+
       // Create mock primary client
       mockPrimaryClient = {
         signer: {
@@ -871,61 +871,65 @@ describe('SessionSigner methods', () => {
         },
       ]
 
-      windowSelectionTestCases.forEach(({ 
-        name, 
-        timestamp, 
-        windowHours, 
-        usePreviousWindow, 
-        expectedWindowNumber, 
-        description 
-      }) => {
-        it(`should handle ${name}`, async () => {
-          // Mock Date.now to return our test timestamp
-          Date.now = vi.fn().mockReturnValue(timestamp)
+      windowSelectionTestCases.forEach(
+        ({
+          name,
+          timestamp,
+          windowHours,
+          usePreviousWindow,
+          expectedWindowNumber,
+          description,
+        }) => {
+          it(`should handle ${name}`, async () => {
+            // Mock Date.now to return our test timestamp
+            Date.now = vi.fn().mockReturnValue(timestamp)
 
-          // Track which window number is actually used in the passkey derivation
-          let actualWindowNumber: number | undefined
-          
-          // Mock getOrCreateDerivedKey to capture the window number
-          const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
-          mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
-            actualWindowNumber = config.windowNumber
-            return {
-              credentialId: 'mock-credential-id',
-              privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-            }
-          })
+            // Track which window number is actually used in the passkey derivation
+            let actualWindowNumber: number | undefined
 
-          // Create session signer with the specified configuration
-          await newSessionSigner({
-            primaryClient: mockPrimaryClient,
-            saltName: 'test-salt',
-            stintWindowHours: windowHours,
-            usePreviousWindow: usePreviousWindow,
-          })
-
-          // Verify the correct window number was passed to passkey derivation
-          expect(actualWindowNumber).toBe(expectedWindowNumber)
-          
-          // Verify getOrCreateDerivedKey was called with the expected config
-          expect(mockGetOrCreateDerivedKey).toHaveBeenCalledWith(
-            expect.objectContaining({
-              stintWindowHours: windowHours,
-              windowNumber: expectedWindowNumber,
+            // Mock getOrCreateDerivedKey to capture the window number
+            const mockGetOrCreateDerivedKey = vi.mocked(
+              await import('./passkey')
+            ).getOrCreateDerivedKey
+            mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+              actualWindowNumber = config.windowNumber
+              return {
+                credentialId: 'mock-credential-id',
+                privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+              }
             })
-          )
-          
-          // Log description for documentation
-          expect(description).toBeDefined()
-        })
-      })
+
+            // Create session signer with the specified configuration
+            await newSessionSigner({
+              primaryClient: mockPrimaryClient,
+              saltName: 'test-salt',
+              stintWindowHours: windowHours,
+              usePreviousWindow: usePreviousWindow,
+            })
+
+            // Verify the correct window number was passed to passkey derivation
+            expect(actualWindowNumber).toBe(expectedWindowNumber)
+
+            // Verify getOrCreateDerivedKey was called with the expected config
+            expect(mockGetOrCreateDerivedKey).toHaveBeenCalledWith(
+              expect.objectContaining({
+                stintWindowHours: windowHours,
+                windowNumber: expectedWindowNumber,
+              })
+            )
+
+            // Log description for documentation
+            expect(description).toBeDefined()
+          })
+        }
+      )
 
       it('should default to current window when usePreviousWindow not specified', async () => {
         const timestamp = 72 * 60 * 60 * 1000 // 72 hours = 3 full 24h windows
         Date.now = vi.fn().mockReturnValue(timestamp)
 
         let actualWindowNumber: number | undefined
-        
+
         const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
         mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
           actualWindowNumber = config.windowNumber
@@ -953,7 +957,7 @@ describe('SessionSigner methods', () => {
         Date.now = vi.fn().mockReturnValue(timestamp)
 
         let actualWindowNumber: number | undefined
-        
+
         const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
         mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
           actualWindowNumber = config.windowNumber
@@ -1016,29 +1020,33 @@ describe('SessionSigner methods', () => {
         },
       ]
 
-      windowHoursTestCases.forEach(({ name, stintWindowHours, expectedWindowHours, description }) => {
-        it(`should handle ${name}`, async () => {
-          let actualStintWindowHours: number | undefined
-          
-          const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
-          mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
-            actualStintWindowHours = config.stintWindowHours
-            return {
-              credentialId: 'mock-credential-id',
-              privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-            }
-          })
+      windowHoursTestCases.forEach(
+        ({ name, stintWindowHours, expectedWindowHours, description }) => {
+          it(`should handle ${name}`, async () => {
+            let actualStintWindowHours: number | undefined
 
-          await newSessionSigner({
-            primaryClient: mockPrimaryClient,
-            saltName: 'test-salt',
-            stintWindowHours: stintWindowHours,
-          })
+            const mockGetOrCreateDerivedKey = vi.mocked(
+              await import('./passkey')
+            ).getOrCreateDerivedKey
+            mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
+              actualStintWindowHours = config.stintWindowHours
+              return {
+                credentialId: 'mock-credential-id',
+                privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+              }
+            })
 
-          expect(actualStintWindowHours).toBe(expectedWindowHours)
-          expect(description).toBeDefined()
-        })
-      })
+            await newSessionSigner({
+              primaryClient: mockPrimaryClient,
+              saltName: 'test-salt',
+              stintWindowHours: stintWindowHours,
+            })
+
+            expect(actualStintWindowHours).toBe(expectedWindowHours)
+            expect(description).toBeDefined()
+          })
+        }
+      )
     })
 
     describe('window calculation consistency', () => {
@@ -1047,7 +1055,7 @@ describe('SessionSigner methods', () => {
         Date.now = vi.fn().mockReturnValue(timestamp)
 
         const capturedConfigs: any[] = []
-        
+
         const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
         mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
           capturedConfigs.push(config)
@@ -1081,7 +1089,7 @@ describe('SessionSigner methods', () => {
         Date.now = vi.fn().mockReturnValue(timestamp)
 
         const capturedConfigs: any[] = []
-        
+
         const mockGetOrCreateDerivedKey = vi.mocked(await import('./passkey')).getOrCreateDerivedKey
         mockGetOrCreateDerivedKey.mockImplementation(async (config) => {
           capturedConfigs.push(config)

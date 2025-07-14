@@ -935,32 +935,32 @@ describe('passkey utilities', () => {
       windowTestCases.forEach(({ name, windowHours, description }) => {
         it(`should handle ${name}`, () => {
           const boundaries = getWindowBoundaries(windowHours)
-          
+
           // Verify structure
           expect(boundaries).toHaveProperty('start')
           expect(boundaries).toHaveProperty('end')
           expect(boundaries).toHaveProperty('windowNumber')
-          
+
           // Verify types
           expect(boundaries.start).toBeInstanceOf(Date)
           expect(boundaries.end).toBeInstanceOf(Date)
           expect(typeof boundaries.windowNumber).toBe('number')
-          
+
           // Verify window duration
           const durationMs = boundaries.end.getTime() - boundaries.start.getTime()
           const expectedDurationMs = windowHours * 60 * 60 * 1000
           expect(durationMs).toBe(expectedDurationMs)
-          
+
           // Verify current time is within window
           const now = Date.now()
           expect(now).toBeGreaterThanOrEqual(boundaries.start.getTime())
           expect(now).toBeLessThan(boundaries.end.getTime())
-          
+
           // Verify window number calculation
           const windowMs = windowHours * 60 * 60 * 1000
           const expectedWindowNumber = Math.floor(now / windowMs)
           expect(boundaries.windowNumber).toBe(expectedWindowNumber)
-          
+
           // Log description for documentation
           expect(description).toBeDefined()
         })
@@ -968,7 +968,7 @@ describe('passkey utilities', () => {
 
       it('should handle default 24-hour window when no parameter provided', () => {
         const boundaries = getWindowBoundaries()
-        
+
         const durationMs = boundaries.end.getTime() - boundaries.start.getTime()
         const expectedDurationMs = 24 * 60 * 60 * 1000 // 24 hours in ms
         expect(durationMs).toBe(expectedDurationMs)
@@ -977,7 +977,7 @@ describe('passkey utilities', () => {
       it('should produce consistent results for same window hour values', () => {
         const boundaries1 = getWindowBoundaries(24)
         const boundaries2 = getWindowBoundaries(24)
-        
+
         // Should be the same window (called within same millisecond usually)
         expect(boundaries1.windowNumber).toBe(boundaries2.windowNumber)
         expect(boundaries1.start.getTime()).toBe(boundaries2.start.getTime())
@@ -988,7 +988,7 @@ describe('passkey utilities', () => {
         // Test very small window
         const small = getWindowBoundaries(0.1) // 6 minutes
         expect(small.end.getTime() - small.start.getTime()).toBe(0.1 * 60 * 60 * 1000)
-        
+
         // Test very large window
         const large = getWindowBoundaries(8760) // 1 year
         expect(large.end.getTime() - large.start.getTime()).toBe(8760 * 60 * 60 * 1000)
@@ -1059,29 +1059,31 @@ describe('passkey utilities', () => {
         },
       ]
 
-      windowCalculationTestCases.forEach(({ name, timestamp, windowHours, expectedWindowNumber }) => {
-        it(`should calculate correct window number ${name}`, () => {
-          // Mock Date.now to return our test timestamp
-          Date.now = vi.fn().mockReturnValue(timestamp)
-          
-          const boundaries = getWindowBoundaries(windowHours)
-          
-          expect(boundaries.windowNumber).toBe(expectedWindowNumber)
-          
-          // Verify the window start aligns with our calculation
-          const windowMs = windowHours * 60 * 60 * 1000
-          const expectedStart = expectedWindowNumber * windowMs
-          expect(boundaries.start.getTime()).toBe(expectedStart)
-          
-          // Verify the window end is exactly one window duration later
-          const expectedEnd = expectedStart + windowMs
-          expect(boundaries.end.getTime()).toBe(expectedEnd)
-          
-          // Verify our mocked timestamp falls within the window
-          expect(timestamp).toBeGreaterThanOrEqual(boundaries.start.getTime())
-          expect(timestamp).toBeLessThan(boundaries.end.getTime())
-        })
-      })
+      windowCalculationTestCases.forEach(
+        ({ name, timestamp, windowHours, expectedWindowNumber }) => {
+          it(`should calculate correct window number ${name}`, () => {
+            // Mock Date.now to return our test timestamp
+            Date.now = vi.fn().mockReturnValue(timestamp)
+
+            const boundaries = getWindowBoundaries(windowHours)
+
+            expect(boundaries.windowNumber).toBe(expectedWindowNumber)
+
+            // Verify the window start aligns with our calculation
+            const windowMs = windowHours * 60 * 60 * 1000
+            const expectedStart = expectedWindowNumber * windowMs
+            expect(boundaries.start.getTime()).toBe(expectedStart)
+
+            // Verify the window end is exactly one window duration later
+            const expectedEnd = expectedStart + windowMs
+            expect(boundaries.end.getTime()).toBe(expectedEnd)
+
+            // Verify our mocked timestamp falls within the window
+            expect(timestamp).toBeGreaterThanOrEqual(boundaries.start.getTime())
+            expect(timestamp).toBeLessThan(boundaries.end.getTime())
+          })
+        }
+      )
     })
 
     describe('window boundary transitions', () => {
@@ -1098,22 +1100,22 @@ describe('passkey utilities', () => {
       it('should handle transition from one window to next', () => {
         const windowHours = 24
         const windowMs = windowHours * 60 * 60 * 1000
-        
+
         // Test just before boundary
         Date.now = vi.fn().mockReturnValue(windowMs - 1)
         const beforeBoundary = getWindowBoundaries(windowHours)
         expect(beforeBoundary.windowNumber).toBe(0)
-        
+
         // Test exactly at boundary
         Date.now = vi.fn().mockReturnValue(windowMs)
         const atBoundary = getWindowBoundaries(windowHours)
         expect(atBoundary.windowNumber).toBe(1)
-        
+
         // Test just after boundary
         Date.now = vi.fn().mockReturnValue(windowMs + 1)
         const afterBoundary = getWindowBoundaries(windowHours)
         expect(afterBoundary.windowNumber).toBe(1)
-        
+
         // Verify windows are consecutive
         expect(atBoundary.windowNumber).toBe(beforeBoundary.windowNumber + 1)
         expect(afterBoundary.windowNumber).toBe(beforeBoundary.windowNumber + 1)
@@ -1123,14 +1125,14 @@ describe('passkey utilities', () => {
         const windowHours = 8
         const windowMs = windowHours * 60 * 60 * 1000
         const boundaryTime = windowMs * 5 // 5th window boundary
-        
+
         // Multiple calls at exact same timestamp should be identical
         Date.now = vi.fn().mockReturnValue(boundaryTime)
-        
+
         const call1 = getWindowBoundaries(windowHours)
         const call2 = getWindowBoundaries(windowHours)
         const call3 = getWindowBoundaries(windowHours)
-        
+
         expect(call1.windowNumber).toBe(call2.windowNumber)
         expect(call2.windowNumber).toBe(call3.windowNumber)
         expect(call1.start.getTime()).toBe(call2.start.getTime())
@@ -1140,7 +1142,7 @@ describe('passkey utilities', () => {
       it('should handle microsecond precision at boundaries', () => {
         const windowHours = 1 // 1 hour window for more precise testing
         const windowMs = windowHours * 60 * 60 * 1000
-        
+
         // Test timestamps very close to boundary
         const testPoints = [
           windowMs - 0.1,
@@ -1149,11 +1151,11 @@ describe('passkey utilities', () => {
           windowMs + 0.01,
           windowMs + 0.1,
         ]
-        
+
         testPoints.forEach((timestamp) => {
           Date.now = vi.fn().mockReturnValue(timestamp)
           const boundaries = getWindowBoundaries(windowHours)
-          
+
           if (timestamp < windowMs) {
             expect(boundaries.windowNumber).toBe(0)
           } else {
@@ -1177,15 +1179,15 @@ describe('passkey utilities', () => {
 
       it('should generate different salt for different window numbers', async () => {
         const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-        
+
         // Track the salts used in PRF calls
         const capturedSalts: string[] = []
-        
+
         mockWebAuthn.mockGet.mockImplementation(async (options: any) => {
           const saltFirst = new TextDecoder().decode(options.publicKey.extensions.prf.eval.first)
           const saltSecond = new TextDecoder().decode(options.publicKey.extensions.prf.eval.second)
           capturedSalts.push(saltFirst, saltSecond)
-          
+
           return {
             id: 'mock-credential-id',
             rawId: new ArrayBuffer(0),
@@ -1216,15 +1218,15 @@ describe('passkey utilities', () => {
         // Verify salt format includes the explicit window number
         expect(capturedSalts.length).toBeGreaterThan(0)
         const saltUsed = capturedSalts[0]
-        
+
         // Remove the PRF suffix (\x00) that gets appended for the first PRF call
         const nullChar = String.fromCharCode(0)
         const baseSalt = saltUsed.endsWith(nullChar) ? saltUsed.slice(0, -1) : saltUsed
-        
+
         // Parse the salt components: domain:address:purpose:windowNumber
         const parts = baseSalt.split(':')
         expect(parts).toHaveLength(4)
-        
+
         const [domain, address, purpose, windowNumber] = parts
         // Domain could be test.example.com or localhost depending on test environment
         expect(['test.example.com', 'localhost']).toContain(domain)
@@ -1235,12 +1237,12 @@ describe('passkey utilities', () => {
 
       it('should generate time-based salt when no explicit window number provided', async () => {
         const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-        
+
         let capturedSalt: string = ''
-        
+
         mockWebAuthn.mockGet.mockImplementation(async (options: any) => {
           capturedSalt = new TextDecoder().decode(options.publicKey.extensions.prf.eval.first)
-          
+
           return {
             id: 'mock-credential-id',
             rawId: new ArrayBuffer(0),
@@ -1270,16 +1272,16 @@ describe('passkey utilities', () => {
         // Remove the PRF suffix (\x00) that gets appended for the first PRF call
         const nullChar = String.fromCharCode(0)
         const baseSalt = capturedSalt.endsWith(nullChar) ? capturedSalt.slice(0, -1) : capturedSalt
-        
+
         const parts = baseSalt.split(':')
         expect(parts).toHaveLength(4) // domain:address:purpose:windowNumber
-        
+
         const [domain, address, purpose, windowNumber] = parts
         // Domain could be test.example.com or localhost depending on test environment
         expect(['test.example.com', 'localhost']).toContain(domain)
         expect(address).toBe('atone1test123')
         expect(purpose).toBe('test-salt')
-        
+
         // Should contain a calculated window number (numeric value)
         const parsedWindowNumber = parseInt(windowNumber)
         expect(parsedWindowNumber).toBeGreaterThanOrEqual(0)
@@ -1288,13 +1290,13 @@ describe('passkey utilities', () => {
 
       it('should generate different salts for different window sizes', async () => {
         const mockWebAuthn = setupWebAuthnMock({ prfSupported: true })
-        
+
         const capturedSalts: string[] = []
-        
+
         mockWebAuthn.mockGet.mockImplementation(async (options: any) => {
           const salt = new TextDecoder().decode(options.publicKey.extensions.prf.eval.first)
           capturedSalts.push(salt)
-          
+
           return {
             id: 'mock-credential-id',
             rawId: new ArrayBuffer(0),
@@ -1317,7 +1319,7 @@ describe('passkey utilities', () => {
         const timestamp = Date.now()
         const originalDateNow = Date.now
         Date.now = vi.fn().mockReturnValue(timestamp)
-        
+
         try {
           // 24 hour window
           await getOrCreateDerivedKey({
@@ -1326,7 +1328,7 @@ describe('passkey utilities', () => {
             stintWindowHours: 24,
           })
 
-          // 8 hour window  
+          // 8 hour window
           await getOrCreateDerivedKey({
             address: 'atone1test123',
             saltName: 'test-salt',
@@ -1336,12 +1338,11 @@ describe('passkey utilities', () => {
           // Should have different window numbers due to different window sizes
           expect(capturedSalts).toHaveLength(2)
           expect(capturedSalts[0]).not.toBe(capturedSalts[1])
-          
+
           // Extract window numbers
           const windowNumber24h = parseInt(capturedSalts[0].split(':')[3])
           const windowNumber8h = parseInt(capturedSalts[1].split(':')[3])
           expect(windowNumber24h).not.toBe(windowNumber8h)
-          
         } finally {
           Date.now = originalDateNow
         }

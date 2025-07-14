@@ -22,7 +22,7 @@ function generateStintSalt(
   const now = Date.now()
   const windowMs = windowHours * 60 * 60 * 1000
   const calculatedWindowNumber = windowNumber ?? Math.floor(now / windowMs)
-  
+
   const domain = window.location.hostname
   return `${domain}:${userAddress}:${purpose}:${calculatedWindowNumber}`
 }
@@ -32,11 +32,15 @@ function generateStintSalt(
  * @param windowHours The window size in hours
  * @returns Object with start and end timestamps of current window
  */
-export function getWindowBoundaries(windowHours: number = 24): { start: Date; end: Date; windowNumber: number } {
+export function getWindowBoundaries(windowHours: number = 24): {
+  start: Date
+  end: Date
+  windowNumber: number
+} {
   const now = Date.now()
   const windowMs = windowHours * 60 * 60 * 1000
   const windowNumber = Math.floor(now / windowMs)
-  
+
   return {
     start: new Date(windowNumber * windowMs),
     end: new Date((windowNumber + 1) * windowMs),
@@ -84,8 +88,6 @@ function generateSecureChallenge(): Uint8Array {
   return challenge
 }
 
-
-
 /**
  * HKDF-SHA256 key derivation function using WebCrypto API
  * @param ikm Input Key Material (PRF output)
@@ -100,13 +102,7 @@ async function hkdf(
   length: number
 ): Promise<Uint8Array> {
   // Import the input key material
-  const key = await crypto.subtle.importKey(
-    'raw',
-    ikm,
-    'HKDF',
-    false,
-    ['deriveBits']
-  )
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits'])
 
   // Derive bits using HKDF-SHA256
   const derivedBits = await crypto.subtle.deriveBits(
@@ -170,11 +166,7 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
   let existingCredential: ExistingCredential | null = null
 
   try {
-    existingCredential = await getExistingPasskey(
-      options.address,
-      stintSalt,
-      logger
-    )
+    existingCredential = await getExistingPasskey(options.address, stintSalt, logger)
   } catch (error) {
     // If user cancelled during existing passkey check, don't proceed to create
     if (
@@ -197,7 +189,11 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
 
     if (existingCredential.prfSupported && existingCredential.prfOutput) {
       // Use the PRF output we already got to derive the private key with HKDF
-      const privateKey = await derivePrivateKeyWithHKDF(existingCredential.prfOutput, stintSalt, logger)
+      const privateKey = await derivePrivateKeyWithHKDF(
+        existingCredential.prfOutput,
+        stintSalt,
+        logger
+      )
       logger.debug('Session key ready')
       return {
         credentialId: existingCredential.credentialId,
@@ -205,7 +201,11 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
       }
     } else if (existingCredential.prfSupported) {
       try {
-        const privateKey = await derivePrivateKey(existingCredential.credentialId, stintSalt, logger)
+        const privateKey = await derivePrivateKey(
+          existingCredential.credentialId,
+          stintSalt,
+          logger
+        )
         logger.debug('Session key ready')
         return {
           credentialId: existingCredential.credentialId,

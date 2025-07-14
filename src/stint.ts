@@ -23,7 +23,6 @@ import { createExecuteHelpers } from './execute'
 // SESSION SIGNER CREATION
 // ============================================================================
 
-
 /**
  * Create a complete session signer in one step
  * Combines passkey creation, signer derivation, and chain connection
