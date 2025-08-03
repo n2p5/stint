@@ -119,7 +119,8 @@ const sessionSigner = await newSessionSigner({
   saltName?: 'my-app',             // Optional: isolate different apps
   stintWindowHours?: 24,           // Optional: key rotation interval (default: 24 hours)
   usePreviousWindow?: false,       // Optional: use previous time window for grace period
-  logger?: consoleLogger           // Optional: enable debug logs
+  logger?: consoleLogger,          // Optional: enable debug logs
+  keyMode?: 'passkey'              // Optional: 'passkey' (default) or 'random' (ephemeral)
 })
 ```
 
@@ -200,11 +201,35 @@ console.log('Window start:', boundaries.start)
 console.log('Window end:', boundaries.end)
 ```
 
+## Key Mode Options
+
+Stint supports two key generation modes:
+
+### Passkey Mode (Default)
+- Uses device biometrics (fingerprint/Face ID) via WebAuthn
+- Keys are deterministically derived from Passkey PRF extension
+- Survives page refreshes within the same time window
+- Most secure option
+
+### Random Mode (Fallback)
+- For environments without Passkey support
+- Generates cryptographically secure random keys
+- **Keys are ephemeral** - lost on page refresh
+- Use when Passkeys aren't available
+
+```typescript
+// Random mode example - keys won't persist
+const ephemeralSigner = await newSessionSigner({
+  primaryClient,
+  keyMode: 'random'  // Ephemeral keys, lost on refresh
+})
+```
+
 ## Key Features
 
 ✅ **Zero-balance signers** - Session signers never hold funds
 
-✅ **Passkey security** - Uses device biometrics for key derivation
+✅ **Passkey security** - Uses device biometrics for key derivation (in passkey mode)
 
 ✅ **Automatic key rotation** - Time-windowed keys rotate automatically
 

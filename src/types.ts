@@ -58,6 +58,7 @@ export interface SessionSignerConfig {
   stintWindowHours?: number // Time window in hours for key validity (default: 24, supports any duration)
   usePreviousWindow?: boolean // Use previous window instead of current (default: false)
   logger?: Logger
+  keyMode?: 'passkey' | 'random' // Key generation mode (default: 'passkey')
 }
 
 export interface DelegationConfig {

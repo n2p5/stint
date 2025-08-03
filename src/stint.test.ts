@@ -12,6 +12,13 @@ vi.mock('./passkey', () => ({
   }),
 }))
 
+// Mock the random module
+vi.mock('./random', () => ({
+  getOrCreateRandomKey: vi.fn().mockReturnValue(
+    '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+  )
+}))
+
 describe('dateToTimestamp', () => {
   // Table-driven tests for dateToTimestamp
   const testCases = [
@@ -1116,6 +1123,61 @@ describe('SessionSigner methods', () => {
         // Should have different window numbers
         expect(capturedConfigs).toHaveLength(2)
         expect(capturedConfigs[0].windowNumber).toBe(capturedConfigs[1].windowNumber + 1)
+      })
+    })
+
+    describe('SessionSigner with Random Mode', () => {
+      it('should create session signer with random key mode', async () => {
+        // Import mocked modules
+        const { getOrCreateRandomKey } = await import('./random')
+        const { getOrCreateDerivedKey } = await import('./passkey')
+
+        // Clear previous calls
+        vi.clearAllMocks()
+
+        // Create session signer with random mode
+        const signer = await newSessionSigner({
+          primaryClient: mockPrimaryClient,
+          keyMode: 'random'
+        })
+
+        // Verify random key generation was called
+        expect(getOrCreateRandomKey).toHaveBeenCalledWith({
+          configObject: expect.objectContaining({
+            primaryClient: mockPrimaryClient,
+            keyMode: 'random'
+          }),
+          logger: expect.any(Object)
+        })
+
+        // Verify passkey was not called
+        expect(getOrCreateDerivedKey).not.toHaveBeenCalled()
+
+        // Verify signer was created
+        expect(signer).toBeDefined()
+        expect(signer.primaryAddress()).toBe('atone1primary123')
+        expect(signer.sessionAddress()).toBe('atone1session456')
+      })
+
+      it('should use passkey mode by default', async () => {
+        // Import mocked modules
+        const { getOrCreateDerivedKey } = await import('./passkey')
+        const { getOrCreateRandomKey } = await import('./random')
+
+        // Clear previous calls
+        vi.clearAllMocks()
+
+        // Create session signer without specifying keyMode
+        const signer = await newSessionSigner({
+          primaryClient: mockPrimaryClient
+        })
+
+        // Verify passkey was used, not random
+        expect(getOrCreateDerivedKey).toHaveBeenCalled()
+        expect(getOrCreateRandomKey).not.toHaveBeenCalled()
+
+        // Verify signer was created
+        expect(signer).toBeDefined()
       })
     })
   })
