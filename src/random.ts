@@ -33,31 +33,29 @@ export function getOrCreateRandomKey(config: RandomKeyConfig): string {
 
   // Generate new random key
   logger.debug('Generating new random session key')
-  
+
   // Generate 32 bytes of cryptographically secure random data
   const privateKeyBytes = crypto.getRandomValues(new Uint8Array(32))
-  
+
   // Validate we got proper random bytes (not all zeros)
   const sum = privateKeyBytes.reduce((acc, byte) => acc + byte, 0)
   if (sum === 0) {
-    throw new StintError(
-      'Failed to generate secure random key',
-      ErrorCodes.KEY_GENERATION_FAILED,
-      { reason: 'Insufficient entropy' }
-    )
+    throw new StintError('Failed to generate secure random key', ErrorCodes.KEY_GENERATION_FAILED, {
+      reason: 'Insufficient entropy',
+    })
   }
 
   // Convert to hex string
   const privateKey = toHex(privateKeyBytes)
-  
+
   // Store in memory only (will be garbage collected with config object)
   ephemeralKeys.set(config.configObject, privateKey)
-  
+
   // Clear the bytes from memory
   privateKeyBytes.fill(0)
-  
+
   logger.warn('Random session key generated - will not persist across page refresh')
-  
+
   return privateKey
 }
 

@@ -71,7 +71,7 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
 
   // Get or create key based on mode
   let privateKeyHex: string
-  
+
   if (config.keyMode === 'random') {
     // Random mode: generate ephemeral key
     privateKeyHex = getOrCreateRandomKey({

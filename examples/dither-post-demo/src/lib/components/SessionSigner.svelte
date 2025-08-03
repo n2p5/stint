@@ -12,6 +12,7 @@
   let showAdvanced = false;
   let stintWindowHours = 24; // Default 24 hours
   let usePreviousWindow = false;
+  let keyMode: 'passkey' | 'random' = 'passkey'; // Default to passkey mode
   
   async function createSession() {
     isCreating = true;
@@ -32,7 +33,9 @@
         }
       );
       
-      status = 'Creating session signer with passkey...';
+      status = keyMode === 'passkey' 
+        ? 'Creating session signer with passkey...' 
+        : 'Creating ephemeral session signer...';
       
       // Create session signer with consoleLogger from stint and window configuration
       const sessionSigner = await newSessionSigner({
@@ -40,6 +43,7 @@
         saltName: 'stint-session',
         stintWindowHours,
         usePreviousWindow,
+        keyMode,
         logger: consoleLogger
       });
       
@@ -72,6 +76,9 @@
           case ErrorCodes.PASSKEY_CREATION_FAILED:
           case ErrorCodes.PASSKEY_AUTHENTICATION_FAILED:
             error = 'Failed to create or authenticate with passkey. Please try again.';
+            break;
+          case ErrorCodes.KEY_GENERATION_FAILED:
+            error = 'Failed to generate random key. Please try again.';
             break;
           default:
             error = `Session signer creation failed: ${err.message}`;
@@ -156,10 +163,45 @@
       </div>
     {:else if $sessionStore.isConnected}
       <p class="text-base-content/70">
-        Create a session signer using a Passkey. This signer will be able to transact on behalf of your primary address.
+        Create a session signer to transact on behalf of your primary address. Choose between passkey-based (persistent) or ephemeral (temporary) mode.
       </p>
       
-      <!-- Advanced Window Configuration -->
+      <!-- Key Mode Selection -->
+      <div class="form-control w-full">
+        <label class="label">
+          <span class="label-text">Session Key Mode</span>
+        </label>
+        <div class="join">
+          <input 
+            class="join-item btn" 
+            type="radio" 
+            name="keyMode" 
+            aria-label="Passkey Mode" 
+            bind:group={keyMode}
+            value="passkey"
+          />
+          <input 
+            class="join-item btn" 
+            type="radio" 
+            name="keyMode" 
+            aria-label="Ephemeral Mode" 
+            bind:group={keyMode}
+            value="random"
+          />
+        </div>
+        <label class="label">
+          <span class="label-text-alt">
+            {#if keyMode === 'passkey'}
+              Uses device biometrics. Keys persist within time windows.
+            {:else}
+              Random keys. Lost on page refresh. No passkey required.
+            {/if}
+          </span>
+        </label>
+      </div>
+      
+      <!-- Advanced Window Configuration (only for passkey mode) -->
+      {#if keyMode === 'passkey'}
       <div class="collapse collapse-arrow bg-base-200">
         <input type="checkbox" bind:checked={showAdvanced} />
         <div class="collapse-title text-xl font-medium">
@@ -212,6 +254,16 @@
           </div>
         </div>
       </div>
+      {/if}
+      
+      {#if keyMode === 'random'}
+      <div class="alert alert-warning">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>Ephemeral mode: Session keys will be lost on page refresh!</span>
+      </div>
+      {/if}
       
       {#if status}
         <div class="alert alert-info">

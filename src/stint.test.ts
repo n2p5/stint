@@ -14,9 +14,9 @@ vi.mock('./passkey', () => ({
 
 // Mock the random module
 vi.mock('./random', () => ({
-  getOrCreateRandomKey: vi.fn().mockReturnValue(
-    '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-  )
+  getOrCreateRandomKey: vi
+    .fn()
+    .mockReturnValue('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'),
 }))
 
 describe('dateToTimestamp', () => {
@@ -1138,16 +1138,16 @@ describe('SessionSigner methods', () => {
         // Create session signer with random mode
         const signer = await newSessionSigner({
           primaryClient: mockPrimaryClient,
-          keyMode: 'random'
+          keyMode: 'random',
         })
 
         // Verify random key generation was called
         expect(getOrCreateRandomKey).toHaveBeenCalledWith({
           configObject: expect.objectContaining({
             primaryClient: mockPrimaryClient,
-            keyMode: 'random'
+            keyMode: 'random',
           }),
-          logger: expect.any(Object)
+          logger: expect.any(Object),
         })
 
         // Verify passkey was not called
@@ -1169,7 +1169,7 @@ describe('SessionSigner methods', () => {
 
         // Create session signer without specifying keyMode
         const signer = await newSessionSigner({
-          primaryClient: mockPrimaryClient
+          primaryClient: mockPrimaryClient,
         })
 
         // Verify passkey was used, not random
