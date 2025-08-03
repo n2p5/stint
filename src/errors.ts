@@ -37,6 +37,9 @@ export const ErrorCodes = {
   INVALID_AMOUNT: 'INVALID_AMOUNT',
   INVALID_DENOMINATION: 'INVALID_DENOMINATION',
   INVALID_RPC_URL: 'INVALID_RPC_URL',
+
+  // Key generation errors
+  KEY_GENERATION_FAILED: 'KEY_GENERATION_FAILED',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

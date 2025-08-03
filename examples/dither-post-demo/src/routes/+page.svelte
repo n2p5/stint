@@ -32,8 +32,9 @@
         <div class="space-y-4">
           <h3 class="text-lg font-semibold">Session Signers</h3>
           <ul class="list-disc list-inside space-y-2 text-sm">
-            <li>Created using WebAuthn Passkeys</li>
-            <li>Deterministic key derivation</li>
+            <li>Two modes: Passkey (persistent) or Ephemeral (temporary)</li>
+            <li>Passkey mode: Deterministic key derivation with biometrics</li>
+            <li>Ephemeral mode: Random keys, no passkey required</li>
             <li>Never hold any funds</li>
             <li>Can sign transactions on behalf of primary address</li>
           </ul>

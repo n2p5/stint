@@ -15,6 +15,7 @@ import {
   SigningStargateClientWithSigner,
 } from './types'
 import { getOrCreateDerivedKey } from './passkey'
+import { getOrCreateRandomKey } from './random'
 import { StintError, ErrorCodes } from './errors'
 import { Logger, noopLogger } from './logger'
 import { createExecuteHelpers } from './execute'
@@ -65,20 +66,33 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
     windowNumber,
     windowHours,
     usePreviousWindow: config.usePreviousWindow || false,
+    keyMode: config.keyMode || 'passkey',
   })
 
-  // Get or create derived key for selected window
-  const derivedKey = await getOrCreateDerivedKey({
-    address: primaryAddress,
-    displayName: `Stint: ${primaryAddress.slice(0, 10)}...`,
-    saltName: config.saltName || 'stint-session',
-    stintWindowHours: windowHours,
-    windowNumber,
-    logger,
-  })
+  // Get or create key based on mode
+  let privateKeyHex: string
 
-  // Create the session signer from the derived private key with same prefix as primary
-  const privateKey = fromHex(derivedKey.privateKey)
+  if (config.keyMode === 'random') {
+    // Random mode: generate ephemeral key
+    privateKeyHex = getOrCreateRandomKey({
+      configObject: config, // Use config object as WeakMap key
+      logger,
+    })
+  } else {
+    // Passkey mode (default): derive from passkey
+    const derivedKey = await getOrCreateDerivedKey({
+      address: primaryAddress,
+      displayName: `Stint: ${primaryAddress.slice(0, 10)}...`,
+      saltName: config.saltName || 'stint-session',
+      stintWindowHours: windowHours,
+      windowNumber,
+      logger,
+    })
+    privateKeyHex = derivedKey.privateKey
+  }
+
+  // Create the session signer from the private key with same prefix as primary
+  const privateKey = fromHex(privateKeyHex)
   const sessionSigner = await DirectSecp256k1Wallet.fromKey(privateKey, prefix)
 
   // Get the session signer address
