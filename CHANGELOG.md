@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-08-07
+
+### Changed
+
+- Simplified code by removing unnecessary abstractions and inlining utility functions ([#10](https://github.com/n2p5/stint/pull/10))
+- Updated all development dependencies including TypeScript 5.9.2 ([#11](https://github.com/n2p5/stint/pull/11))
+
 ## [0.5.0] - 2025-08-02
 
 ### Added
@@ -153,8 +160,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grant checking utilities
   - Revocation message generation
 
-[Unreleased]: https://github.com/n2p5/stint/compare/v0.4.0...HEAD
-[0.5.0]: https://github.com/n2p5/stint/compare/v0.3.2...v0.5.0
+[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/n2p5/stint/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/n2p5/stint/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/n2p5/stint/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/n2p5/stint/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/n2p5/stint/compare/v0.3.0...v0.3.1
