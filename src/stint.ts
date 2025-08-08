@@ -1,6 +1,5 @@
 import { SigningStargateClient, GasPrice } from '@cosmjs/stargate'
 import { DirectSecp256k1Wallet, EncodeObject } from '@cosmjs/proto-signing'
-import { fromHex } from '@cosmjs/encoding'
 import { Coin } from 'cosmjs-types/cosmos/base/v1beta1/coin'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
@@ -15,7 +14,6 @@ import {
   SigningStargateClientWithSigner,
 } from './types'
 import { getOrCreateDerivedKey } from './passkey'
-import { getOrCreateRandomKey } from './random'
 import { StintError, ErrorCodes } from './errors'
 import { Logger, noopLogger } from './logger'
 import { createExecuteHelpers } from './execute'
@@ -70,14 +68,13 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
   })
 
   // Get or create key based on mode
-  let privateKeyHex: string
+  let privateKey: Uint8Array
 
   if (config.keyMode === 'random') {
     // Random mode: generate ephemeral key
-    privateKeyHex = getOrCreateRandomKey({
-      configObject: config, // Use config object as WeakMap key
-      logger,
-    })
+    logger.debug('Generating new random session key')
+    logger.warn('Random session key generated - will not persist across page refresh')
+    privateKey = crypto.getRandomValues(new Uint8Array(32))
   } else {
     // Passkey mode (default): derive from passkey
     const derivedKey = await getOrCreateDerivedKey({
@@ -88,11 +85,10 @@ export async function newSessionSigner(config: SessionSignerConfig): Promise<Ses
       windowNumber,
       logger,
     })
-    privateKeyHex = derivedKey.privateKey
+    privateKey = derivedKey.privateKey
   }
 
   // Create the session signer from the private key with same prefix as primary
-  const privateKey = fromHex(privateKeyHex)
   const sessionSigner = await DirectSecp256k1Wallet.fromKey(privateKey, prefix)
 
   // Get the session signer address
@@ -446,9 +442,10 @@ function createHasFeegrant(
 
 // Convert Date to protobuf Timestamp
 export function dateToTimestamp(date: Date): Timestamp {
-  const seconds = Math.floor(date.getTime() / 1000)
-  const nanos = (date.getTime() % 1000) * 1000000
-  return Timestamp.fromPartial({ seconds: BigInt(seconds), nanos })
+  return Timestamp.fromPartial({
+    seconds: BigInt(Math.floor(date.getTime() / 1000)),
+    nanos: (date.getTime() % 1000) * 1_000_000,
+  })
 }
 
 // Generate authz grant and feegrant messages for session signer delegation

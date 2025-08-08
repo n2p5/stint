@@ -8,15 +8,8 @@ import { StintError, ErrorCodes } from './errors'
 // Mock the passkey module
 vi.mock('./passkey', () => ({
   getOrCreateDerivedKey: vi.fn().mockResolvedValue({
-    privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    privateKey: new Uint8Array(32).fill(0x12), // Mock bytes instead of hex
   }),
-}))
-
-// Mock the random module
-vi.mock('./random', () => ({
-  getOrCreateRandomKey: vi
-    .fn()
-    .mockReturnValue('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'),
 }))
 
 describe('dateToTimestamp', () => {
@@ -902,7 +895,7 @@ describe('SessionSigner methods', () => {
               actualWindowNumber = config.windowNumber
               return {
                 credentialId: 'mock-credential-id',
-                privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+                privateKey: new Uint8Array(32).fill(0x12),
               }
             })
 
@@ -942,7 +935,7 @@ describe('SessionSigner methods', () => {
           actualWindowNumber = config.windowNumber
           return {
             credentialId: 'mock-credential-id',
-            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            privateKey: new Uint8Array(32).fill(0x12),
           }
         })
 
@@ -970,7 +963,7 @@ describe('SessionSigner methods', () => {
           actualWindowNumber = config.windowNumber
           return {
             credentialId: 'mock-credential-id',
-            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            privateKey: new Uint8Array(32).fill(0x12),
           }
         })
 
@@ -1039,7 +1032,7 @@ describe('SessionSigner methods', () => {
               actualStintWindowHours = config.stintWindowHours
               return {
                 credentialId: 'mock-credential-id',
-                privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+                privateKey: new Uint8Array(32).fill(0x12),
               }
             })
 
@@ -1068,7 +1061,7 @@ describe('SessionSigner methods', () => {
           capturedConfigs.push(config)
           return {
             credentialId: 'mock-credential-id',
-            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            privateKey: new Uint8Array(32).fill(0x12),
           }
         })
 
@@ -1102,7 +1095,7 @@ describe('SessionSigner methods', () => {
           capturedConfigs.push(config)
           return {
             credentialId: 'mock-credential-id',
-            privateKey: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+            privateKey: new Uint8Array(32).fill(0x12),
           }
         })
 
@@ -1129,7 +1122,6 @@ describe('SessionSigner methods', () => {
     describe('SessionSigner with Random Mode', () => {
       it('should create session signer with random key mode', async () => {
         // Import mocked modules
-        const { getOrCreateRandomKey } = await import('./random')
         const { getOrCreateDerivedKey } = await import('./passkey')
 
         // Clear previous calls
@@ -1141,28 +1133,19 @@ describe('SessionSigner methods', () => {
           keyMode: 'random',
         })
 
-        // Verify random key generation was called
-        expect(getOrCreateRandomKey).toHaveBeenCalledWith({
-          configObject: expect.objectContaining({
-            primaryClient: mockPrimaryClient,
-            keyMode: 'random',
-          }),
-          logger: expect.any(Object),
-        })
-
-        // Verify passkey was not called
+        // Verify passkey was not called (random mode doesn't use passkey)
         expect(getOrCreateDerivedKey).not.toHaveBeenCalled()
 
         // Verify signer was created
         expect(signer).toBeDefined()
         expect(signer.primaryAddress()).toBe('atone1primary123')
-        expect(signer.sessionAddress()).toBe('atone1session456')
+        // Session address will be different each time due to random key generation
+        expect(signer.sessionAddress()).toBeDefined()
       })
 
       it('should use passkey mode by default', async () => {
         // Import mocked modules
         const { getOrCreateDerivedKey } = await import('./passkey')
-        const { getOrCreateRandomKey } = await import('./random')
 
         // Clear previous calls
         vi.clearAllMocks()
@@ -1172,9 +1155,8 @@ describe('SessionSigner methods', () => {
           primaryClient: mockPrimaryClient,
         })
 
-        // Verify passkey was used, not random
+        // Verify passkey was used (default mode)
         expect(getOrCreateDerivedKey).toHaveBeenCalled()
-        expect(getOrCreateRandomKey).not.toHaveBeenCalled()
 
         // Verify signer was created
         expect(signer).toBeDefined()

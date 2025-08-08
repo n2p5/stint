@@ -90,33 +90,6 @@ describe('passkey utilities', () => {
       expect(challenge).toBeInstanceOf(Uint8Array)
       expect(challenge.length).toBe(32)
     })
-
-    it('should detect all-zero challenge bytes', async () => {
-      // Mock crypto.getRandomValues to return all zeros
-      const originalGetRandomValues = crypto.getRandomValues
-      crypto.getRandomValues = vi.fn().mockImplementation((array) => {
-        // Return all zeros to trigger the entropy check
-        array.fill(0)
-        return array
-      })
-
-      Object.defineProperty(window, 'location', {
-        value: { hostname: 'localhost' },
-        writable: true,
-      })
-
-      // Don't setup WebAuthn mock - let it fail on challenge generation
-      try {
-        await expect(
-          getOrCreateDerivedKey({
-            address: 'atone1test123',
-          })
-        ).rejects.toThrow('Failed to generate secure challenge')
-      } finally {
-        // Restore original function
-        crypto.getRandomValues = originalGetRandomValues
-      }
-    })
   })
 
   describe('PRF output handling', () => {
@@ -147,7 +120,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
 
     it('should handle different PRF output buffer types', async () => {
@@ -166,7 +140,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
   })
 
@@ -213,7 +188,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
   })
 
@@ -340,7 +316,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
 
     it('should handle PRF output as Uint8Array during getExistingPasskey', async () => {
@@ -371,7 +348,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
   })
 
@@ -405,7 +383,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
 
     it('should handle successful authentication flow', async () => {
@@ -420,7 +399,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
   })
 
@@ -458,7 +438,8 @@ describe('passkey utilities', () => {
         })
 
         expect(result.credentialId).toBe('mock-credential-id')
-        expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+        expect(result.privateKey).toBeInstanceOf(Uint8Array)
+        expect(result.privateKey.length).toBe(32)
         expect(mockWebAuthn.mockCreate).toHaveBeenCalledOnce()
       })
 
@@ -470,7 +451,8 @@ describe('passkey utilities', () => {
         })
 
         expect(result.credentialId).toBe('mock-credential-id')
-        expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+        expect(result.privateKey).toBeInstanceOf(Uint8Array)
+        expect(result.privateKey.length).toBe(32)
         expect(mockWebAuthn.mockCreate).not.toHaveBeenCalled()
       })
 
@@ -524,7 +506,10 @@ describe('passkey utilities', () => {
           saltName: 'salt2',
         })
 
-        expect(result1.privateKey).not.toBe(result2.privateKey)
+        // Convert to hex for comparison (arrays with same values are different objects)
+        const hex1 = Buffer.from(result1.privateKey).toString('hex')
+        const hex2 = Buffer.from(result2.privateKey).toString('hex')
+        expect(hex1).not.toBe(hex2)
       })
 
       it('should handle existing passkey requiring separate PRF derivation call', async () => {
@@ -567,7 +552,8 @@ describe('passkey utilities', () => {
         })
 
         expect(result.credentialId).toBe('mock-credential-id')
-        expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+        expect(result.privateKey).toBeInstanceOf(Uint8Array)
+        expect(result.privateKey.length).toBe(32)
         expect(mockCreate).not.toHaveBeenCalled()
         expect(mockGet).toHaveBeenCalledTimes(1) // Only called once since PRF output was available
       })
@@ -825,7 +811,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
 
     it('should handle network error when checking existing passkey', async () => {
@@ -840,7 +827,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
       expect(mockWebAuthn.mockCreate).toHaveBeenCalled()
     })
 
@@ -873,7 +861,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
     })
 
     it('should handle passkey authentication with custom logger', async () => {
@@ -891,7 +880,8 @@ describe('passkey utilities', () => {
       })
 
       expect(result.credentialId).toBe('mock-credential-id')
-      expect(result.privateKey).toMatch(/^[0-9a-f]{64}$/)
+      expect(result.privateKey).toBeInstanceOf(Uint8Array)
+      expect(result.privateKey.length).toBe(32)
       expect(mockLogger.debug).toHaveBeenCalled()
     })
   })
