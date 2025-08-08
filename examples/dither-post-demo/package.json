@@ -10,19 +10,19 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "devDependencies": {
-    "@sveltejs/adapter-static": "^3.0.8",
-    "@sveltejs/kit": "^2.27.0",
+    "@sveltejs/adapter-static": "^3.0.9",
+    "@sveltejs/kit": "^2.27.3",
     "@sveltejs/vite-plugin-svelte": "^6.1.0",
     "@tailwindcss/postcss": "^4.1.11",
-    "@types/node": "^24.1.0",
+    "@types/node": "^24.2.0",
     "autoprefixer": "^10.4.21",
     "daisyui": "^5.0.50",
     "postcss": "^8.5.6",
-    "svelte": "^5.37.2",
-    "svelte-check": "^4.3.0",
+    "svelte": "^5.38.0",
+    "svelte-check": "^4.3.1",
     "tailwindcss": "^4.1.11",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.6"
+    "typescript": "^5.9.2",
+    "vite": "^7.1.1"
   },
   "dependencies": {
     "@cosmjs/stargate": "^0.34.0",
