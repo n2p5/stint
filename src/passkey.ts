@@ -83,15 +83,17 @@ async function hkdf(
   length: number
 ): Promise<Uint8Array> {
   // Import the input key material
-  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits'])
+  const key = await crypto.subtle.importKey('raw', ikm.buffer as ArrayBuffer, 'HKDF', false, [
+    'deriveBits',
+  ])
 
   // Derive bits using HKDF-SHA256
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: salt,
-      info: info,
+      salt: salt.buffer as ArrayBuffer,
+      info: info.buffer as ArrayBuffer,
     },
     key,
     length * 8 // Convert bytes to bits
@@ -256,7 +258,7 @@ async function getExistingPasskey(
   stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<ExistingCredential | null> {
-  const challenge = crypto.getRandomValues(new Uint8Array(32))
+  const challenge = crypto.getRandomValues(new Uint8Array(32)).buffer as ArrayBuffer
 
   try {
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
@@ -268,8 +270,8 @@ async function getExistingPasskey(
       extensions: {
         prf: {
           eval: {
-            first: new TextEncoder().encode(stintSalt + '\x00'),
-            second: new TextEncoder().encode(stintSalt + '\x01'),
+            first: new TextEncoder().encode(stintSalt + '\x00').buffer as ArrayBuffer,
+            second: new TextEncoder().encode(stintSalt + '\x01').buffer as ArrayBuffer,
           },
         },
       },
@@ -312,10 +314,8 @@ async function getExistingPasskey(
       let output1: Uint8Array
       if (prfResult1 instanceof ArrayBuffer) {
         output1 = new Uint8Array(prfResult1)
-      } else if (prfResult1 instanceof Uint8Array) {
-        output1 = prfResult1
       } else {
-        output1 = new Uint8Array(prfResult1 as ArrayBuffer)
+        output1 = new Uint8Array(prfResult1)
       }
 
       // Convert second result to Uint8Array (if available)
@@ -323,10 +323,8 @@ async function getExistingPasskey(
       if (prfResult2) {
         if (prfResult2 instanceof ArrayBuffer) {
           output2 = new Uint8Array(prfResult2)
-        } else if (prfResult2 instanceof Uint8Array) {
-          output2 = prfResult2
         } else {
-          output2 = new Uint8Array(prfResult2 as ArrayBuffer)
+          output2 = new Uint8Array(prfResult2)
         }
       } else {
         // If second output is not available, use first output again
@@ -378,7 +376,7 @@ async function createPasskey(
   options: InternalPasskeyConfig,
   logger: Logger = noopLogger
 ): Promise<PublicKeyCredential> {
-  const challenge = crypto.getRandomValues(new Uint8Array(32))
+  const challenge = crypto.getRandomValues(new Uint8Array(32)).buffer as ArrayBuffer
 
   const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
     challenge,
@@ -445,7 +443,7 @@ async function getPasskeyPRF(
   stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<Uint8Array> {
-  const challenge = crypto.getRandomValues(new Uint8Array(32))
+  const challenge = crypto.getRandomValues(new Uint8Array(32)).buffer as ArrayBuffer
 
   // Convert base64url credential ID to bytes
   const base64 = credentialId.replace(/-/g, '+').replace(/_/g, '/')
@@ -458,15 +456,15 @@ async function getPasskeyPRF(
     userVerification: 'required', // Require user verification for security
     allowCredentials: [
       {
-        id: credentialIdBytes,
+        id: credentialIdBytes.buffer as ArrayBuffer,
         type: 'public-key',
       },
     ],
     extensions: {
       prf: {
         eval: {
-          first: new TextEncoder().encode(stintSalt + '\x00'),
-          second: new TextEncoder().encode(stintSalt + '\x01'),
+          first: new TextEncoder().encode(stintSalt + '\x00').buffer as ArrayBuffer,
+          second: new TextEncoder().encode(stintSalt + '\x01').buffer as ArrayBuffer,
         },
       },
     },
@@ -502,10 +500,8 @@ async function getPasskeyPRF(
   let output1: Uint8Array
   if (prfResult1 instanceof ArrayBuffer) {
     output1 = new Uint8Array(prfResult1)
-  } else if (prfResult1 instanceof Uint8Array) {
-    output1 = prfResult1
   } else {
-    output1 = new Uint8Array(prfResult1 as ArrayBuffer)
+    output1 = new Uint8Array(prfResult1)
   }
 
   // Convert second result to Uint8Array (if available)
@@ -513,10 +509,8 @@ async function getPasskeyPRF(
   if (prfResult2) {
     if (prfResult2 instanceof ArrayBuffer) {
       output2 = new Uint8Array(prfResult2)
-    } else if (prfResult2 instanceof Uint8Array) {
-      output2 = prfResult2
     } else {
-      output2 = new Uint8Array(prfResult2 as ArrayBuffer)
+      output2 = new Uint8Array(prfResult2)
     }
   } else {
     // If second output is not available, use first output again

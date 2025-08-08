@@ -18,8 +18,8 @@ export interface SigningStargateClientWithSigner {
 
 // WebAuthn PRF Extension types
 export interface PRFValues {
-  first: ArrayBuffer | Uint8Array
-  second?: ArrayBuffer | Uint8Array
+  first: ArrayBuffer
+  second?: ArrayBuffer
 }
 
 export interface PRFExtensionResults {
