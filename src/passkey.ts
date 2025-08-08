@@ -53,15 +53,21 @@ export function getWindowBoundaries(windowHours: number = 24): {
  */
 function getSecureRpId(): string {
   const hostname = window.location.hostname
-  
+
   // Allow localhost, IP addresses, and valid domain names
-  if (!hostname || hostname === 'localhost' || /^[\d.]+$/.test(hostname) || /^[a-zA-Z0-9.-]+$/.test(hostname)) {
+  if (
+    !hostname ||
+    hostname === 'localhost' ||
+    /^[\d.]+$/.test(hostname) ||
+    /^[a-zA-Z0-9.-]+$/.test(hostname)
+  ) {
     return hostname
   }
-  
-  throw new StintError('Invalid hostname for WebAuthn', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, { hostname })
-}
 
+  throw new StintError('Invalid hostname for WebAuthn', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, {
+    hostname,
+  })
+}
 
 /**
  * HKDF-SHA256 key derivation function using WebCrypto API
@@ -433,7 +439,6 @@ async function createPasskey(
   return credential
 }
 
-
 // Get PRF output from passkey
 async function getPasskeyPRF(
   credentialId: string,
@@ -533,7 +538,7 @@ async function derivePrivateKey(
   logger: Logger = noopLogger
 ): Promise<Uint8Array> {
   const prfOutput = await getPasskeyPRF(credentialId, stintSalt, logger)
-  
+
   // Use HKDF to derive the private key
   const saltBytes = new TextEncoder().encode(stintSalt)
   const infoBytes = new TextEncoder().encode('stint-key-derivation')

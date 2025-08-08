@@ -90,7 +90,6 @@ describe('passkey utilities', () => {
       expect(challenge).toBeInstanceOf(Uint8Array)
       expect(challenge.length).toBe(32)
     })
-
   })
 
   describe('PRF output handling', () => {
@@ -440,7 +439,7 @@ describe('passkey utilities', () => {
 
         expect(result.credentialId).toBe('mock-credential-id')
         expect(result.privateKey).toBeInstanceOf(Uint8Array)
-      expect(result.privateKey.length).toBe(32)
+        expect(result.privateKey.length).toBe(32)
         expect(mockWebAuthn.mockCreate).toHaveBeenCalledOnce()
       })
 
@@ -453,7 +452,7 @@ describe('passkey utilities', () => {
 
         expect(result.credentialId).toBe('mock-credential-id')
         expect(result.privateKey).toBeInstanceOf(Uint8Array)
-      expect(result.privateKey.length).toBe(32)
+        expect(result.privateKey.length).toBe(32)
         expect(mockWebAuthn.mockCreate).not.toHaveBeenCalled()
       })
 
@@ -554,7 +553,7 @@ describe('passkey utilities', () => {
 
         expect(result.credentialId).toBe('mock-credential-id')
         expect(result.privateKey).toBeInstanceOf(Uint8Array)
-      expect(result.privateKey.length).toBe(32)
+        expect(result.privateKey.length).toBe(32)
         expect(mockCreate).not.toHaveBeenCalled()
         expect(mockGet).toHaveBeenCalledTimes(1) // Only called once since PRF output was available
       })
