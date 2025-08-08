@@ -1,4 +1,4 @@
-import { toHex, fromBase64 } from '@cosmjs/encoding'
+import { fromBase64 } from '@cosmjs/encoding'
 import { PublicKeyCredentialWithPRF } from './types'
 import { StintError, ErrorCodes } from './errors'
 import { Logger, noopLogger } from './logger'
@@ -50,43 +50,18 @@ export function getWindowBoundaries(windowHours: number = 24): {
 
 /**
  * Validate and get secure RP ID
- * Prevents subdomain attacks and validates origin
  */
 function getSecureRpId(): string {
   const hostname = window.location.hostname
-
-  // Validate hostname format
-  if (!hostname || hostname === 'localhost' || /^[\d.]+$/.test(hostname)) {
-    // Allow localhost and IP addresses for development
+  
+  // Allow localhost, IP addresses, and valid domain names
+  if (!hostname || hostname === 'localhost' || /^[\d.]+$/.test(hostname) || /^[a-zA-Z0-9.-]+$/.test(hostname)) {
     return hostname
   }
-
-  // For production domains, validate format
-  if (!/^[a-zA-Z0-9.-]+$/.test(hostname)) {
-    throw new StintError('Invalid hostname for WebAuthn', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, {
-      hostname,
-    })
-  }
-
-  return hostname
+  
+  throw new StintError('Invalid hostname for WebAuthn', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, { hostname })
 }
 
-/**
- * Generate cryptographically secure challenge
- */
-function generateSecureChallenge(): Uint8Array {
-  const challenge = crypto.getRandomValues(new Uint8Array(32))
-
-  // Validate we got proper random bytes (not all zeros)
-  const sum = challenge.reduce((acc, byte) => acc + byte, 0)
-  if (sum === 0) {
-    throw new StintError('Failed to generate secure challenge', ErrorCodes.WEBAUTHN_NOT_SUPPORTED, {
-      reason: 'Insufficient entropy',
-    })
-  }
-
-  return challenge
-}
 
 /**
  * HKDF-SHA256 key derivation function using WebCrypto API
@@ -122,7 +97,7 @@ async function hkdf(
 // Public interfaces
 export interface DerivedKey {
   credentialId: string
-  privateKey: string // hex encoded
+  privateKey: Uint8Array // Private key bytes
 }
 
 export interface PasskeyConfig {
@@ -189,15 +164,13 @@ export async function getOrCreateDerivedKey(options: PasskeyConfig): Promise<Der
 
     if (existingCredential.prfSupported && existingCredential.prfOutput) {
       // Use the PRF output we already got to derive the private key with HKDF
-      const privateKey = await derivePrivateKeyWithHKDF(
-        existingCredential.prfOutput,
-        stintSalt,
-        logger
-      )
+      const saltBytes = new TextEncoder().encode(stintSalt)
+      const infoBytes = new TextEncoder().encode('stint-key-derivation')
+      const privateKey = await hkdf(existingCredential.prfOutput, saltBytes, infoBytes, 32)
       logger.debug('Session key ready')
       return {
         credentialId: existingCredential.credentialId,
-        privateKey: toHex(privateKey),
+        privateKey,
       }
     } else if (existingCredential.prfSupported) {
       try {
@@ -277,7 +250,7 @@ async function getExistingPasskey(
   stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<ExistingCredential | null> {
-  const challenge = generateSecureChallenge()
+  const challenge = crypto.getRandomValues(new Uint8Array(32))
 
   try {
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
@@ -399,7 +372,7 @@ async function createPasskey(
   options: InternalPasskeyConfig,
   logger: Logger = noopLogger
 ): Promise<PublicKeyCredential> {
-  const challenge = generateSecureChallenge()
+  const challenge = crypto.getRandomValues(new Uint8Array(32))
 
   const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
     challenge,
@@ -460,14 +433,6 @@ async function createPasskey(
   return credential
 }
 
-// Helper function to decode base64url
-function base64urlToBytes(base64url: string): Uint8Array {
-  // Convert base64url to base64
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  // Add padding if needed
-  const padded = base64 + '==='.slice(0, (4 - (base64.length % 4)) % 4)
-  return fromBase64(padded)
-}
 
 // Get PRF output from passkey
 async function getPasskeyPRF(
@@ -475,9 +440,12 @@ async function getPasskeyPRF(
   stintSalt: string,
   logger: Logger = noopLogger
 ): Promise<Uint8Array> {
-  const challenge = generateSecureChallenge()
+  const challenge = crypto.getRandomValues(new Uint8Array(32))
 
-  const credentialIdBytes = base64urlToBytes(credentialId)
+  // Convert base64url credential ID to bytes
+  const base64 = credentialId.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64 + '==='.slice(0, (4 - (base64.length % 4)) % 4)
+  const credentialIdBytes = fromBase64(padded)
 
   const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
     challenge,
@@ -558,31 +526,16 @@ async function getPasskeyPRF(
   return combinedOutput
 }
 
-// Derive a private key using HKDF from PRF output
-async function derivePrivateKeyWithHKDF(
-  prfOutput: Uint8Array,
-  stintSalt: string,
-  _logger: Logger = noopLogger
-): Promise<Uint8Array> {
-  const saltBytes = new TextEncoder().encode(stintSalt)
-  const infoBytes = new TextEncoder().encode('stint-key-derivation')
-
-  // Use HKDF to derive the private key
-  const privateKey = await hkdf(prfOutput, saltBytes, infoBytes, 32)
-
-  return privateKey
-}
-
 // Derive a private key from passkey PRF output
 async function derivePrivateKey(
   credentialId: string,
   stintSalt: string,
   logger: Logger = noopLogger
-): Promise<string> {
+): Promise<Uint8Array> {
   const prfOutput = await getPasskeyPRF(credentialId, stintSalt, logger)
-
+  
   // Use HKDF to derive the private key
-  const privateKey = await derivePrivateKeyWithHKDF(prfOutput, stintSalt, logger)
-
-  return toHex(privateKey)
+  const saltBytes = new TextEncoder().encode(stintSalt)
+  const infoBytes = new TextEncoder().encode('stint-key-derivation')
+  return hkdf(prfOutput, saltBytes, infoBytes, 32)
 }

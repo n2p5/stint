@@ -7,9 +7,6 @@ export { wrapInMsgExec, createFeeWithGranter, send, custom } from './execute'
 // Window utilities (for debugging and validation)
 export { getWindowBoundaries } from './passkey'
 
-// Random key utilities (for advanced usage)
-export { getOrCreateRandomKey, clearRandomKey } from './random'
-
 // Types
 export type { SessionSigner, SessionSignerConfig, DelegationConfig, ExecuteHelpers } from './types'
 
