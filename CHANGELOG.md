@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2025-08-13
+
+### Changed
+
+- Updated CosmJS dependencies to 0.35.0 from 0.34.0 ([#12](https://github.com/n2p5/stint/pull/12))
+- Updated @cosmjs/crypto, @cosmjs/encoding, @cosmjs/proto-signing, and @cosmjs/stargate
+
 ## [0.5.1] - 2025-08-07
 
 ### Changed
@@ -160,7 +167,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grant checking utilities
   - Revocation message generation
 
-[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/n2p5/stint/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/n2p5/stint/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/n2p5/stint/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/n2p5/stint/compare/v0.3.2...v0.4.0
