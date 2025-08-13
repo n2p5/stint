@@ -25,7 +25,7 @@
     "vite": "^7.1.1"
   },
   "dependencies": {
-    "@cosmjs/stargate": "^0.34.0",
+    "@cosmjs/stargate": "^0.35.0",
     "cosmjs-types": "^0.10.1",
     "stint-signer": "workspace:*"
   },
