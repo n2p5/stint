@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2025-09-09
+
+### Changed
+
+- Updated CosmJS dependencies to 0.36.0 and other dependencies to latest versions ([#14](https://github.com/n2p5/stint/pull/14))
+
 ## [0.5.2] - 2025-08-13
 
 ### Changed
