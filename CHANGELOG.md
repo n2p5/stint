@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2025-10-18
+
+### Changed
+
+- Updated CosmJS dependencies from 0.36.0 to 0.36.1 ([#17](https://github.com/n2p5/stint/pull/17))
+- Updated development dependencies including:
+  - happy-dom from 18.0.1 to 20.0.5
+  - TypeScript from 5.9.2 to 5.9.3
+  - ESLint and TypeScript ESLint from 8.43.0 to 8.46.1
+  - @types/node from 24.3.1 to 24.8.1
+
 ## [0.5.3] - 2025-09-08
 
 ### Changed
@@ -173,7 +184,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grant checking utilities
   - Revocation message generation
 
-[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/n2p5/stint/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/n2p5/stint/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/n2p5/stint/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/n2p5/stint/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/n2p5/stint/compare/v0.4.0...v0.5.0
