@@ -11,21 +11,21 @@
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.47.1",
+    "@sveltejs/kit": "^2.48.4",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
-    "@tailwindcss/postcss": "^4.1.14",
-    "@types/node": "^24.8.1",
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/node": "^24.9.2",
     "autoprefixer": "^10.4.21",
-    "daisyui": "^5.3.7",
+    "daisyui": "^5.3.10",
     "postcss": "^8.5.6",
-    "svelte": "^5.41.0",
+    "svelte": "^5.43.2",
     "svelte-check": "^4.3.3",
-    "tailwindcss": "^4.1.14",
+    "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3",
-    "vite": "^7.1.10"
+    "vite": "^7.1.12"
   },
   "dependencies": {
-    "@cosmjs/stargate": "^0.36.1",
+    "@cosmjs/stargate": "^0.37.0",
     "cosmjs-types": "^0.10.1",
     "stint-signer": "workspace:*"
   },
