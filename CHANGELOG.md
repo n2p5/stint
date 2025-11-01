@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2025-10-30
+
+### Changed
+
+- Updated vitest and related packages from 4.0.5 to 4.0.6
+
 ## [0.5.5] - 2025-10-30
 
 ### Changed
@@ -192,7 +198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grant checking utilities
   - Revocation message generation
 
-[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/n2p5/stint/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/n2p5/stint/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/n2p5/stint/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/n2p5/stint/compare/v0.5.2...v0.5.3
