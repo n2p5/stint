@@ -1,6 +1,6 @@
 {
   "name": "stint-signer",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Short-lived, non-custodial session signer using passkeys for Cosmos SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -44,18 +44,18 @@
   },
   "packageManager": "pnpm@10.12.4",
   "devDependencies": {
-    "@eslint/js": "^9.38.0",
-    "@types/node": "^24.9.2",
-    "@typescript-eslint/eslint-plugin": "^8.46.2",
-    "@typescript-eslint/parser": "^8.46.2",
-    "@vitest/coverage-v8": "^4.0.5",
-    "@vitest/ui": "^4.0.5",
-    "eslint": "^9.38.0",
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.3",
+    "@typescript-eslint/parser": "^8.46.3",
+    "@vitest/coverage-v8": "^4.0.7",
+    "@vitest/ui": "^4.0.7",
+    "eslint": "^9.39.1",
     "happy-dom": "^20.0.10",
     "prettier": "^3.6.2",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.5"
+    "vitest": "^4.0.7"
   },
   "dependencies": {
     "@cosmjs/crypto": "^0.37.0",

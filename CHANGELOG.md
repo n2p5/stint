@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.7] - 2025-11-04
+
+### Changed
+
+- Updated development dependencies and demo application packages to latest versions
+
 ## [0.5.6] - 2025-10-30
 
 ### Changed
@@ -198,7 +204,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grant checking utilities
   - Revocation message generation
 
-[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/n2p5/stint/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/n2p5/stint/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/n2p5/stint/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/n2p5/stint/compare/v0.5.3...v0.5.4
