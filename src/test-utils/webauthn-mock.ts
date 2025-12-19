@@ -1,4 +1,9 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
+
+interface WebAuthnMocks {
+  mockCreate: Mock
+  mockGet: Mock
+}
 
 interface MockCredential {
   id: string
@@ -14,7 +19,7 @@ interface MockWebAuthnOptions {
   prfOutput?: Uint8Array
 }
 
-export function setupWebAuthnMock(options: MockWebAuthnOptions = {}) {
+export function setupWebAuthnMock(options: MockWebAuthnOptions = {}): WebAuthnMocks {
   const { prfSupported = true, prfOutput = new Uint8Array(32).fill(42) } = options
 
   // Mock navigator.credentials.create
