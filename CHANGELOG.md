@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.8] - 2025-12-19
+
+### Changed
+
+- Updated cosmjs-types from 0.10.1 to 0.11.0
+- Updated @types/node from 24.10.4 to 25.0.3
+- Updated demo application dependencies including Svelte 5.46.0, Vite 7.3.0, and DaisyUI 5.5.14
+
 ## [0.5.7] - 2025-11-04
 
 ### Changed
@@ -204,7 +212,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grant checking utilities
   - Revocation message generation
 
-[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/n2p5/stint/compare/v0.5.8...HEAD
+[0.5.8]: https://github.com/n2p5/stint/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/n2p5/stint/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/n2p5/stint/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/n2p5/stint/compare/v0.5.4...v0.5.5
